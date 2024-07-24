@@ -1,0 +1,3154 @@
+---
+title: "CortexCode: identification of dynamic enhancers implicated in cortical deep-layer neuron differentiation and autism spectrum disorder (Under Review)"
+subtitle: Enrichment tests of ASD case over control ncSNVs.\n  Enrichment of gene sets 
+
+author: |
+  | Athéna R. Ypsilanti, Eirene Markenscoff-Papadimitriou, Sean Whalen, Karol Cichewicz, Kenneth Lim, Shan Dong, Jada Baldoza, Yurong Wang, Matt Barraza, Fadya Binyameen, Diane Dickel, Len Pennachio, Axel Visel, Stephan J. Sanders, Katherine S. Pollard, Alex S. Nord, John Rubenstein
+  |
+  | Data analysis by:
+  | Karol Cichewicz, kcichewicz@ucdavis.edu,
+  | Alexander Nord, asnord@ucdavis.edu, [Lab website](https://nordlab.faculty.ucdavis.edu/)
+abstract: |
+    Deciphering the genetic circuitry, including epigenetics and regulatory elements (REs), controlling the development and function of the cortex is essential to understand the aetiology of neuropsychiatric disorders. Here, we define the chromatin accessibility and histone modification landscape at REs across time and differentiation of cortical cell states in mice. Chromatin state at enhancers (H3K27ac and H3K27me3) revealed cell-type specific dynamic epigenomic programming underlying transcriptional activation and repression and were more informative than chromatin accessibility in predicting enhancer activity. We present evidence of epigenetic regulatory principles that are important during transitions of cell states in the process of specifying Layer 6 and Layer 5 excitatory neurons. De-repression by the H3K27 demethylase KDM6B, an autism spectrum disorder (ASD) gene, is a critical step for deep layer neuron specification. Loss of Kdm6b function alters expression of ASD risk genes in neurons. Increased H3K27me3 on REs in Kdm6b mutant neurons have an increased rate in ASD mutations notably around genes with reduced transcription and ASD risk genes.  Discoveries here are foundational to understanding the regulatory logic of cortical development and provide novel insights into the role of mutations in REs contributing to ASD.
+output:
+  html_document:
+    code_folding: hide
+    css: style.css
+    theme: spacelab
+    toc: true
+    toc_depth: 4
+    toc_float: true
+urlcolor: blue
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+
+# Directory structure
+#github_dir <- file.path("G:/Shared drives/Nord Lab - Computational Projects/Kdm6b_bulk_RNAseq")
+github_dir <- file.path("./")
+
+setwd(github_dir)
+
+
+# Global R markdown code chunk options
+knitr::opts_chunk$set(message=FALSE, 
+                      warning = FALSE, 
+                      error=FALSE, 
+                      echo=TRUE, 
+                      fig.width = 7, fig.height = 6, 
+                      fig.align = 'left')
+
+
+```
+
+```{r}
+
+# Libraries
+
+library(DT)
+library(GenomicFeatures)
+library(refGenome) # installed manually from https://cran.r-project.org/src/contrib/Archive/refGenome/
+library(tidyverse)
+library(edgeR)
+library(cowplot)
+library(plotly)
+library(pheatmap)
+library(encryptedRmd)
+library(DT)
+library(pander)
+library(Vennerable)
+library(ggplot2)
+
+```
+
+
+# 1 ASD gene enrichment in Kdm6b cKO DE
+
+## 1.1 SFARI score 1 genes
+```{r}
+
+
+# These DE tables are corrupted! Rerun the DE analysis, or retrieve them from a saved session in the end of this script.
+
+#write.csv(wt_het_VZ_DE_Litter_Sex_cor, file = "./DE_tables/VZ_wt_vs_het_DE_Litter_Sex_cor.csv")
+#write.csv(wt_mut_VZ_DE_Litter_Sex_cor, file = "./DE_tables/VZ_wt_vs_mut_DE_Litter_Sex_cor.csv")
+
+#write.csv(wt_het_nonVZ_DE_Litter_Sex_cor, file = "./DE_tables/nonVZ_wt_vs_het_DE_Litter_Sex_cor.csv")
+#write.csv(wt_mut_nonVZ_DE_Litter_Sex_cor, file = "./DE_tables/nonVZ_wt_vs_mut_DE_Litter_Sex_cor.csv")
+
+
+### VZ ###
+wt_het_VZ_DE_Litter_Sex_cor <- read.csv("./DE_tables/VZ_wt_vs_het_DE_Litter_Sex_cor.csv")
+wt_mut_VZ_DE_Litter_Sex_cor <- read.csv("./DE_tables/VZ_wt_vs_mut_DE_Litter_Sex_cor.csv")
+
+### nonVZ ###
+wt_het_nonVZ_DE_Litter_Sex_cor <- read.csv("./DE_tables/nonVZ_wt_vs_het_DE_Litter_Sex_cor.csv")
+wt_mut_nonVZ_DE_Litter_Sex_cor <- read.csv("./DE_tables/nonVZ_wt_vs_mut_DE_Litter_Sex_cor.csv")
+
+
+# find orthologs
+
+# BiocManager::install("orthogene")
+
+if(file.exists("SFARI_genes_w_mouse_orto.csv")){
+    SFARI_genes <- read.csv("SFARI_genes_w_mouse_orto.csv", row.names = 1)
+}else{
+
+library(orthogene)
+
+#download.file(url = "https://gene.sfari.org//wp-content/themes/sfari-gene/utilities/download-csv.php?api-endpoint=genes", destfile = "SFARI-Gene_genes_01-16-2024release_03-02-2024export.csv")
+
+SFARI_genes <- read.csv("SFARI-Gene_genes_01-16-2024release_03-02-2024export.csv")
+    
+human_mouse_orthologs <- orthogene::convert_orthologs(gene_df = SFARI_genes$gene.symbol,
+                             gene_input = "rownames", 
+                             gene_output = "rownames", 
+                             input_species = "human",
+                             output_species = "mouse",
+                             non121_strategy = "keep_both_species")
+
+human_mouse_orthologs$Mouse_ortholog <- rownames(human_mouse_orthologs) 
+
+human_mouse_orthologs$index <- NULL
+rownames(human_mouse_orthologs) <- NULL
+
+colnames(human_mouse_orthologs) <- c("gene.symbol", "Mouse_ortholog")
+
+dim(SFARI_genes) # 1162   10
+
+dim(human_mouse_orthologs) # 1096 2
+
+SFARI_genes <- merge(SFARI_genes, human_mouse_orthologs, all = T)
+
+}
+
+### ###
+
+
+```
+
+
+```{r}
+
+# Permutation test 
+# Assign a Boolean to genes if they are high confidence SFARI genes or not. 
+
+permutation_test <- function(DE_table, SFARI_gene_scores, P_adjusted=FALSE, Sig_threshold, n_of_perm){
+    
+    set.seed(1234)
+    
+    # DE_table <- wt_mut_VZ_DE_Litter_Sex_cor
+    # SFARI_gene_scores = c(1)
+    # P_adjusted=TRUE
+    # Sig_threshold = 0.05
+    # n_of_perm = 10000
+    
+    # Annotate a DE table with SFARI membership at a selected gene score. Score 1 includes 232 genes
+    # SFARI genes must be translated to Mouse orthologs first. Check the library(orthogene) approach.
+    test_genes <- SFARI_genes[SFARI_genes$gene.score %in% SFARI_gene_scores, ]$Mouse_ortholog
+    test_genes <- test_genes[!is.na(test_genes)]
+    DE_table$Is_in_SFARI_score <-  DE_table$gene_name %in% test_genes
+
+    
+    # Values of SFARI membership across all genes  
+    random_vector <- DE_table$Is_in_SFARI_score
+    
+    # Define significant genes
+    if(P_adjusted){
+        significant_genes <<- filter(DE_table, FDR < Sig_threshold)
+    }else{
+        significant_genes <<- filter(DE_table, PValue < Sig_threshold)    
+    }
+    
+
+    n_of_significant <- nrow(significant_genes)
+
+    # Sample random SFARI sum across the population. 
+    # This is the basis of the distribution we score the enrichment against
+    
+    sums_of_perm <- replicate(n_of_perm, sum(sample(random_vector, 
+                                         n_of_significant, 
+                                         replace = FALSE)))
+    
+    # Z score of enrichment in the significant group
+    Significant_Z_scaled <- (sum(significant_genes$Is_in_SFARI_score) - mean(sums_of_perm)) / sd(sums_of_perm)
+
+
+    # lower.tail=FALSE, because I'm testing the significance at the upper end of the distribution 
+    # (enrichment not depletion)
+    perm_P <- pnorm(Significant_Z_scaled, lower.tail=FALSE)
+    
+    # Collect stats 
+    stats <- t(data.frame(
+        "n_of_DE_genes" = as.integer(n_of_significant),
+        "n_of_DE_genes_which_are_SFARI" = as.integer(sum(significant_genes$Is_in_SFARI_score)),
+        "n_of_DE_genes_which_are_Not_SFARI" = as.integer(sum(!significant_genes$Is_in_SFARI_score)),
+        "n_of_SFARI_score1_genes" = as.integer(length(test_genes)),
+        "Z_score_of_SFARI_genes_enrichment_in_sig_genes" = round(Significant_Z_scaled, 6), 
+        "Permutation_test_P"= round(perm_P, 6)))
+    
+    # Plot enrichment and the underlying distribution 
+    df <- data.frame("sums_of_perm" = sums_of_perm)
+    
+    plot <- ggplot()+
+        geom_density(data = df, aes(x = scale(sums_of_perm)))+
+        theme_bw()+
+        geom_vline(xintercept = Significant_Z_scaled, colour = "red", linetype = 2)
+    
+    # Collect stats and plot
+    list(knitr::kable(stats), 
+         plot)
+
+    }
+
+###
+```
+
+```{r, fig.width = 5, fig.height = 4, eval=FALSE}
+
+#wt_het_VZ_DE_Litter_Sex_cor
+#wt_mut_VZ_DE_Litter_Sex_cor
+#wt_het_nonVZ_DE_Litter_Sex_cor
+#wt_mut_nonVZ_DE_Litter_Sex_cor
+
+
+### VZ cells ###
+
+# WT vs Het 
+# At P < 0.05
+
+SFARI_and_Kdm6b_DE_enr <- list(
+
+permutation_test(DE_table = wt_het_VZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = 1, 
+                 P_adjusted=FALSE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000),
+
+# At FDR < 0.05
+permutation_test(DE_table = wt_het_VZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = c(1), 
+                 P_adjusted=TRUE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000),
+
+
+# WT vs Mut 
+# At P < 0.05
+permutation_test(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = c(1), 
+                 P_adjusted=FALSE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000),
+
+# At FDR < 0.05
+permutation_test(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = 1, 
+                 P_adjusted=TRUE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000),
+
+
+
+### non-VZ cells
+
+# WT vs Het 
+# At P < 0.05
+permutation_test(DE_table = wt_het_nonVZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = c(1), 
+                 P_adjusted=FALSE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000),
+
+# At FDR < 0.05
+permutation_test(DE_table = wt_het_nonVZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = c(1), 
+                 P_adjusted=TRUE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000),
+
+
+# WT vs Mut 
+# At P < 0.05
+permutation_test(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = c(1), 
+                 P_adjusted=FALSE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000),
+
+# At FDR < 0.05
+permutation_test(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = c(1), 
+                 P_adjusted=TRUE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000)
+
+)
+
+names(SFARI_and_Kdm6b_DE_enr) <- c("SFARI_and_wt_vs_het_VZ_P05",
+                                "SFARI_and_wt_vs_het_VZ_FDR05",
+                                "SFARI_and_wt_vs_mut_VZ_P05",
+                                "SFARI_and_wt_vs_mut_VZ_FDR05",
+                                
+                                "SFARI_and_wt_vs_het_nonVZ_P05",
+                                "SFARI_and_wt_vs_het_nonVZ_FDR05",
+                                "SFARI_and_wt_vs_mut_nonVZ_P05",
+                                "SFARI_and_wt_vs_mut_nonVZ_FDR05"
+                                )
+
+saveRDS(SFARI_and_Kdm6b_DE_enr,  file = "./Permutation_analysis_objects/SFARI_and_Kdm6b_DE_enr.RDS")
+
+```
+
+
+
+
+This is an extra figure. We decided to use ASD185 gene set enrichment in the manuscript.
+```{r, fig.width = 12, fig.height = 6}
+
+# Figure
+
+plot_grid(
+    
+        permutation_test(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = 1, 
+                 P_adjusted=TRUE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000)[[2]]+
+                 labs(title = "Enrichment of SFARI score 1 genes \nin FDR < 0.05 DE genes. FlashTag+ cells",
+                      subtitle = "Distribution represents simulated randomized gene set intersection. \nRed dashed line represents observed intersection.",
+                      x = "Intersection Z score"),
+
+        permutation_test(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = c(1), 
+                 P_adjusted=TRUE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000)[[2]]+
+                 labs(title = "Enrichment of SFARI score 1 genes \nin FDR < 0.05 DE genes.\nFlashTag- cells",
+                      subtitle = "Distribution represents simulated randomized gene set intersection. \nRed dashed line represents observed intersection.",
+                      x = "Intersection Z score")
+    
+
+)
+
+####
+
+# Tables
+
+        permutation_test(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = 1, 
+                 P_adjusted=TRUE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000)[[1]]
+
+        permutation_test(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                 SFARI_gene_scores = c(1), 
+                 P_adjusted=TRUE, 
+                 Sig_threshold = 0.05, 
+                 n_of_perm = 10000)[[1]]
+
+
+```
+
+
+## 1.2 ASD72 and ASD185 genes 
+
+From [Fu et. al PMID:35982160](https://pubmed.ncbi.nlm.nih.gov/35982160/)
+```{r}
+
+#load("G:/Shared drives/Nord Lab - Computational Projects/Kdm6b_bulk_RNAseq/Session_dump_temp_6_04_2024.RData")
+
+library(readxl)
+
+# Supplementary table
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9653013/bin/NIHMS1844621-supplement-Supplementary_Table.xlsx
+
+## Fu et al. ASD gene sets
+fu <- na.omit(as.data.frame(read_excel("NIHMS1844621-supplement-Supplementary_Table.xlsx", sheet = 11)))
+
+# Fing mouse orthologs
+
+
+library(orthogene)
+
+rm(drop_both_species)
+human_mouse_orthologs <- orthogene::convert_orthologs(gene_df = fu[,2][!duplicated(fu[,2])],
+                             gene_input = "rownames", 
+                             gene_output = "rownames", 
+                             input_species = "human",
+                             output_species = "mouse",
+                             non121_strategy = 1)
+
+
+
+human_mouse_orthologs$Mouse_ortholog <- rownames(human_mouse_orthologs) 
+
+human_mouse_orthologs$index <- NULL
+rownames(human_mouse_orthologs) <- NULL
+
+colnames(human_mouse_orthologs) <- c("gene_gencodeV33", "Mouse_ortholog")
+
+#dim(fu) # 18128    27
+
+#dim(human_mouse_orthologs) # 
+
+fu <- merge(fu, human_mouse_orthologs, all = T)
+
+```
+
+
+```{r, fig.width = 5, fig.height = 4, eval=FALSE}
+
+permutation_test_fu <- function(DE_table, P_adjusted = FALSE, gene_set, Sig_threshold = 0.05, n_of_perm){
+    
+    set.seed(1234)
+    
+    # DE_table <- wt_mut_VZ_DE_Litter_Sex_cor
+    # gene_set = "ASD72"
+    # n_of_perm = 10000
+    # Sig_threshold = 0.05
+    # 
+    
+    #filter(fu, get(gene_set) == TRUE)[,c("gene_gencodeV33", "gene", "Mouse_ortholog")]
+    
+    test_genes <- filter(fu, get(gene_set) == TRUE)$Mouse_ortholog
+
+    test_genes <- test_genes[!is.na(test_genes)]
+    DE_table$Is_in_Fu_set <-  DE_table$gene_name %in% test_genes
+
+    
+    # 
+    random_vector <- DE_table$Is_in_Fu_set
+    
+    # Define significant genes
+    if(P_adjusted){
+        significant_genes <<- filter(DE_table, FDR < Sig_threshold)
+    }else{
+        significant_genes <<- filter(DE_table, PValue < Sig_threshold)    
+    }
+    
+
+    n_of_significant <- nrow(significant_genes)
+
+    # Sample random SFARI sum across the population. 
+    # This is the basis of the distribution we score the enrichment against
+    
+    
+    
+    library(future.apply)
+    plan(multisession, workers = 10)
+    
+    sums_of_perm <- future_replicate(n_of_perm, sum(sample(random_vector, 
+                                         n_of_significant, 
+                                         replace = FALSE)))
+    
+    # Z score of enrichment in the significant group
+    Significant_Z_scaled <- (sum(significant_genes$Is_in_Fu_set) - mean(sums_of_perm)) / sd(sums_of_perm)
+
+
+    # lower.tail=FALSE, because I'm testing the significance at the upper end of the distribution 
+    # (enrichment not depletion)
+    perm_P <- pnorm(Significant_Z_scaled, lower.tail=FALSE)
+    
+    # Collect stats 
+    stats <- t(data.frame(
+        "n_of_DE_genes" = as.integer(n_of_significant),
+        "n_of_DE_genes_which_are_in_Fu_set" = as.integer(sum(significant_genes$Is_in_Fu_set)),
+        "n_of_DE_genes_which_are_Not_in_Fu_set" = as.integer(sum(!significant_genes$Is_in_Fu_set)),
+        "n_of_Fu_set_genes" = as.integer(length(test_genes)),
+        "Z_score_of_Fu_genes_enrichment_in_sig_genes" = round(Significant_Z_scaled, 6), 
+        "Permutation_test_P"= round(perm_P, 6)))
+    
+    # Plot enrichment and the underlying distribution 
+    df <- data.frame("sums_of_perm" = sums_of_perm)
+    
+    plot <- ggplot()+
+        geom_density(data = df, aes(x = scale(sums_of_perm)))+
+        theme_bw()+
+        geom_vline(xintercept = Significant_Z_scaled, colour = "red", linetype = 2)
+    
+    # Collect stats and plot
+    list(knitr::kable(stats), 
+                plot)
+
+    }
+
+# Gene sets: ASD72 ASD185 DD309 DD477 NDD373 NDD664
+
+### ASD72 ###
+
+Fu_and_Kdm6b_DE_enr <- list(
+
+permutation_test_fu(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                    P_adjusted = FALSE, 
+                    gene_set = "ASD72", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+permutation_test_fu(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                    P_adjusted = TRUE, 
+                    gene_set = "ASD72", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+permutation_test_fu(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                    P_adjusted = FALSE, 
+                    gene_set = "ASD72", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+permutation_test_fu(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                    P_adjusted = TRUE, 
+                    gene_set = "ASD72", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+### ASD185 ###
+permutation_test_fu(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                    P_adjusted = FALSE, 
+                    gene_set = "ASD185", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+permutation_test_fu(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                    P_adjusted = TRUE, 
+                    gene_set = "ASD185", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+permutation_test_fu(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                    P_adjusted = FALSE, 
+                    gene_set = "ASD185", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+permutation_test_fu(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                    P_adjusted = TRUE, 
+                    gene_set = "ASD185", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+### DD309 ### 
+
+permutation_test_fu(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                    P_adjusted = FALSE, 
+                    gene_set = "DD309", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+permutation_test_fu(DE_table = wt_mut_VZ_DE_Litter_Sex_cor, 
+                    P_adjusted = TRUE, 
+                    gene_set = "DD309", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+permutation_test_fu(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                    P_adjusted = FALSE, 
+                    gene_set = "DD309", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000),
+
+
+permutation_test_fu(DE_table = wt_mut_nonVZ_DE_Litter_Sex_cor, 
+                    P_adjusted = TRUE, 
+                    gene_set = "DD309", 
+                    Sig_threshold = 0.05, 
+                    n_of_perm = 10000)
+
+)
+
+names(Fu_and_Kdm6b_DE_enr) <- c("ASD72 and Wt vs Mut VZ P05",
+                                "ASD72 and Wt vs Mut VZ FDR05",
+                                "ASD72 and Wt vs Mut nonVZ_P05",
+                                "ASD72 and Wt vs Mut nonVZ FDR05",
+                                
+                                "ASD185 and Wt vs Mut VZ P05",
+                                "ASD185 and Wt vs Mut VZ FDR05",
+                                "ASD185 and Wt vs Mut nonVZ P05",
+                                "ASD185 and Wt vs Mut nonVZ FDR05",
+                                
+                                "DD309 and Wt vs Mut VZ P05",
+                                "DD309 and Wt vs Mut VZ FDR05",
+                                "DD309 and Wt vs Mut nonVZ P05",
+                                "DD309 and Wt vs Mut nonVZ FDR05"
+                                )
+
+
+saveRDS(Fu_and_Kdm6b_DE_enr,  file = "./Permutation_analysis_objects/Fu_and_Kdm6b_DE_enr.RDS")
+
+```
+
+```{r, fig.width=12, fig.height=6}
+library(knitr)
+library(kableExtra)
+
+Fu_and_Kdm6b_DE_enr <- readRDS("./Permutation_analysis_objects/Fu_and_Kdm6b_DE_enr.RDS")
+
+
+plot_grid(
+Fu_and_Kdm6b_DE_enr[[1]][[2]]+labs(title = names(Fu_and_Kdm6b_DE_enr[1])),
+Fu_and_Kdm6b_DE_enr[[2]][[2]]+labs(title = names(Fu_and_Kdm6b_DE_enr[2])), nrow = 1)
+
+```
+
+```{r}
+
+t1 <- Fu_and_Kdm6b_DE_enr[[1]][[1]]
+t2 <- Fu_and_Kdm6b_DE_enr[[2]][[1]]
+
+kable(t1, "html", align = 'clc') %>%
+  kable_styling(full_width = FALSE, position = "float_left")
+kable(t2, "html", align = 'clc') %>%
+  kable_styling(full_width = FALSE, position = "right")
+
+```
+
+```{r, fig.width=12, fig.height=6}
+######
+
+plot_grid(
+Fu_and_Kdm6b_DE_enr[[3]][[2]]+labs(title = names(Fu_and_Kdm6b_DE_enr[3])),
+Fu_and_Kdm6b_DE_enr[[4]][[2]]+labs(title = names(Fu_and_Kdm6b_DE_enr[4])), nrow = 1)
+
+t1 <- Fu_and_Kdm6b_DE_enr[[3]][[1]]
+t2 <- Fu_and_Kdm6b_DE_enr[[4]][[1]]
+
+kable(t1, "html", align = 'clc') %>%
+  kable_styling(full_width = FALSE, position = "float_left")
+kable(t2, "html", align = 'clc') %>%
+  kable_styling(full_width = FALSE, position = "right")
+
+
+
+######
+
+plot_grid(
+Fu_and_Kdm6b_DE_enr[[5]][[2]]+labs(title = names(Fu_and_Kdm6b_DE_enr[5])),
+Fu_and_Kdm6b_DE_enr[[6]][[2]]+labs(title = names(Fu_and_Kdm6b_DE_enr[6])), nrow = 1)
+
+t1 <- Fu_and_Kdm6b_DE_enr[[5]][[1]]
+t2 <- Fu_and_Kdm6b_DE_enr[[6]][[1]]
+
+kable(t1, "html", align = 'clc') %>%
+  kable_styling(full_width = FALSE, position = "float_left")
+kable(t2, "html", align = 'clc') %>%
+  kable_styling(full_width = FALSE, position = "right")
+######
+
+plot_grid(
+Fu_and_Kdm6b_DE_enr[[7]][[2]]+labs(title = names(Fu_and_Kdm6b_DE_enr[7])),
+Fu_and_Kdm6b_DE_enr[[8]][[2]]+labs(title = names(Fu_and_Kdm6b_DE_enr[8])), nrow = 1)
+
+t1 <- Fu_and_Kdm6b_DE_enr[[7]][[1]]
+t2 <- Fu_and_Kdm6b_DE_enr[[8]][[1]]
+
+kable(t1, "html", align = 'clc') %>%
+  kable_styling(full_width = FALSE, position = "float_left")
+kable(t2, "html", align = 'clc') %>%
+  kable_styling(full_width = FALSE, position = "right")
+
+```
+
+
+### 1.2.1 Venn diagrams
+
+```{r, fig.width=5, fig.height=5}
+
+library(ggVennDiagram)
+
+
+s_size = 5
+l_size = 7
+
+
+x <- list(
+ "VZ Kdm6b cKO" = filter(wt_mut_VZ_DE_Litter_Sex_cor, PValue < 0.05)$gene_name,
+ "ASD72" = filter(fu, ASD72 == TRUE)$Mouse_ortholog
+  )
+
+ASD72_venn_VZ <- ggVennDiagram(x, label_alpha = 0, label_size = l_size, auto_scale = TRUE, set_size = s_size)+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")
+
+
+#ASD72_venn_VZ
+
+#####
+
+x <- list(
+ "nonVZ Kdm6b cKO" = filter(wt_mut_nonVZ_DE_Litter_Sex_cor, PValue < 0.05)$gene_name,
+ "ASD72" = filter(fu, ASD72 == TRUE)$Mouse_ortholog
+  )
+
+ASD72_venn_nonVZ <- ggVennDiagram(x, label_alpha = 0, label_size = l_size, auto_scale = TRUE, set_size = s_size)+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")
+
+
+#ASD72_venn_nonVZ
+
+####################
+
+
+x <- list(
+ "VZ Kdm6b cKO" = filter(wt_mut_VZ_DE_Litter_Sex_cor, PValue < 0.05)$gene_name,
+ "ASD185" = filter(fu, ASD185 == TRUE)$Mouse_ortholog
+  )
+
+ASD185_venn_VZ <- ggVennDiagram(x, label_alpha = 0, label_size = l_size, auto_scale = TRUE, set_size = s_size)+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")
+
+
+#ASD185_venn_VZ
+
+
+
+
+x <- list(
+ "nonVZ Kdm6b cKO" = filter(wt_mut_nonVZ_DE_Litter_Sex_cor, PValue < 0.05)$gene_name,
+ "ASD185" = filter(fu, ASD185 == TRUE)$Mouse_ortholog
+  )
+
+ASD185_venn_nonVZ <- ggVennDiagram(x, label_alpha = 0, label_size = l_size, auto_scale = TRUE, set_size = s_size)+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")
+
+
+#ASD185_venn_nonVZ
+
+```
+
+
+```{r, fig.width=12, fig.height=6}
+
+ASD72_venn_VZ + ASD72_venn_nonVZ
+
+ASD185_venn_VZ + ASD185_venn_nonVZ
+
+```
+
+
+
+# 2. ASD case and control ncSNV enrichment in H3k27me3 regions 
+
+
+## 2.1 Ratiometric framework - prototype
+
+Question: Are case or control ncSNV mutations more prevalent in H3K27me3 regions?   
+
+Ratiometric framework developed below is a prototype approach, which suffers from non-normal distribution caused by dropouts, especially at higher ncSNV counts. This approach was improved using a subtraction framework.
+
+Analysis assumptions and details:     
+
+* Mutation - H3K27me3 enr. region intersections are determined using GenomicsRange::findOverlaps()     
+
+* Empirical permutation framework with random control intervals, which are equal in width and chromosome placement to enriched intervals          
+
+* In order to adjust for the difference in statistical power between ASD case and control ncSNVs, mutations are sampled to 2500 producing bootstrapped distributions of both observed and random values.   
+
+* Random intervals are matched in chromosomes and interval width to the H3k27me3 enriched intervals. I generated 1000 sets of random intervals.    
+
+* Ratios of region count intersections (case/control) produce 0s and NaN dropouts, resulting in distributions to deviate from normality, especially for intersections with higher number of ncSNV mutations.        
+
+
+```{r}
+
+library(readxl)
+library(GenomicRanges)
+
+# H3K28me3 enriched regions (mm10)
+enr_regions <- na.omit(as.data.frame(read_excel("Ctl_ASD_Kdm6b_UP.xlsx", sheet = 1))[,18:20])
+colnames(enr_regions) <- c("chr", "start", "stop")
+enr_regions <- makeGRangesFromDataFrame(enr_regions, keep.extra.columns = T)
+enr_regions$region_size <- width(enr_regions)
+
+#enr_regions   # 5318 intervals
+#range(enr_regions$region_size)  # ranging from 1000 to 495000 bp
+#mean(enr_regions$region_size)   # with a mean of 22029.33
+#median(enr_regions$region_size)   # and median of 13000
+
+# Regions > 20 kb
+#table(enr_regions$region_size > 20000)
+# FALSE  TRUE 
+#  3563  1755 
+
+### Cases
+mutations_cases <- na.omit(as.data.frame(read_excel("Ctl_ASD_Kdm6b_UP.xlsx", sheet = 1))[,6:9])
+colnames(mutations_cases) <- c("chr", "start", "stop", "ID")
+mutations_cases <- makeGRangesFromDataFrame(mutations_cases, keep.extra.columns = T)
+
+#table(width(mutations_cases)) # 6154 mutations with 2 bp regions
+
+### Controls
+mutations_controls <- na.omit(as.data.frame(read_excel("Ctl_ASD_Kdm6b_UP.xlsx", sheet = 2))[,6:9])
+colnames(mutations_controls) <- c("chr", "start", "stop", "ID")
+mutations_controls <- makeGRangesFromDataFrame(mutations_controls, keep.extra.columns = T)
+
+#table(width(mutations_controls)) # 3487 mutations with 2 bp regions
+
+
+### 
+
+#enr_regions
+
+#mutations_cases
+
+#mutations_controls
+
+
+
+### Count how many mutations overlap with the enriched regions
+
+overlapping_in_cases <- countOverlaps(query = mutations_cases, subject = enr_regions, ignore.strand=TRUE)
+#table(overlapping_in_cases)
+
+# Overlap:           0    1 
+# Mtation count:  4758 1396 
+
+#1396 / 8626
+
+overlapping_in_controls <- countOverlaps(query = mutations_controls, subject = enr_regions, ignore.strand=TRUE)
+#table(overlapping_in_controls)
+
+# Overlap:           0    1 
+# Mtation count:  2717  770 
+
+
+
+
+#### Overlap counts when regions are filtered to < 20kb
+
+overlapping_in_cases_filtered <- countOverlaps(query = mutations_cases, subject = enr_regions[enr_regions$region_size < 20000], ignore.strand=TRUE)
+#table(overlapping_in_cases_filtered)
+
+# overlapping_in_cases_filtered
+#   0    1 
+# 5404  750 
+
+
+overlapping_in_controls_filtered <- countOverlaps(query = mutations_controls, subject = enr_regions[enr_regions$region_size < 20000], ignore.strand=TRUE)
+#table(overlapping_in_controls_filtered)
+
+# overlapping_in_controls_filtered
+#    0    1 
+# 3104  383 
+
+
+
+### Analysis focused on regions
+
+# There are 6154 mutations in cases and 3487 on controls. Consider downsampling both to 2500
+# Calculate the ratio of the number of regions containing more than X number of mutations between cases and controls, while downsamplinng the number of mutation to the same number (e.g. 2500) to equalize the power.
+
+set.seed(1234)
+
+observed_case_control_ratio <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(query = enr_regions[enr_regions$region_size < max_enr_region], 
+                                              subject = sample(mutations_cases, downsample_to), 
+                                              ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(query = enr_regions[enr_regions$region_size < max_enr_region], 
+                                                subject = sample(mutations_controls, downsample_to), 
+                                                ignore.strand=TRUE)
+
+
+    # Observed ratio of overlapping case / control mutation 
+    sum(reg_overlapping_case_mut > overlap_mut_count_thr) / 
+    sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+
+    }
+
+#observed_ratios_at_0 <- replicate(1000, observed_case_control_ratio(downsample_to = 2500,
+#                                                                    max_enr_region = 20000,
+#                                                               overlap_mut_count_thr = 0))
+
+
+#observed_ratios_at_1 <- replicate(1000, observed_case_control_ratio(downsample_to = 2500,
+#                                                                    max_enr_region = 20000,
+#                                                               overlap_mut_count_thr = 1))
+
+
+#observed_ratios_at_2 <- replicate(1000, observed_case_control_ratio(downsample_to = 2500, 
+#                                                                     max_enr_region = 20000,
+#                                                               overlap_mut_count_thr = 2))
+
+#saveRDS(observed_ratios_at_0, file = "./Permutation_analysis_objects/observed_ratios_at_0.RDS")
+#saveRDS(observed_ratios_at_1, file = "./Permutation_analysis_objects/observed_ratios_at_1.RDS")
+#saveRDS(observed_ratios_at_2, file = "./Permutation_analysis_objects/observed_ratios_at_2.RDS")
+
+observed_ratios_at_0 <- readRDS("./Permutation_analysis_objects/observed_ratios_at_0.RDS")
+observed_ratios_at_1 <- readRDS("./Permutation_analysis_objects/observed_ratios_at_1.RDS")
+observed_ratios_at_2 <- readRDS("./Permutation_analysis_objects/observed_ratios_at_2.RDS")
+
+
+#mean(observed_ratios_at_0) # 1.041591
+#mean(observed_ratios_at_1) # 1.543056
+#mean(observed_ratios_at_2[is.finite(observed_ratios_at_2)]) # 3.098587
+
+
+
+###### Create random intervals, and use them in place of enriched intervals.
+
+# I'll use the same chromosomes and region widths, but different start sites 
+enr_regions_filtered <- enr_regions[enr_regions$region_size < 20000]
+
+seq_lengths <- enr_regions_filtered$region_size
+seq_chrom <-  as.character(enr_regions_filtered@seqnames)
+
+# Read mm10 chrom lengths, from here: https://genome.ucsc.edu/cgi-bin/hgTracks?db=mm10&chromInfoPage=
+
+mm10_chrom_lengths <- c(195471971, 182113224, 171031299, 160039680, 156508116,151834684,149736546,145441459,130694993,129401213,124902244,
+                        124595110,122082543,120421639,120129022,104043685,98207768,94987271,91744698,90702639,61431566)
+
+names(mm10_chrom_lengths) <- c("chr1","chr2","chrX","chr3","chr4","chr5","chr6","chr7","chr10","chr8","chr14","chr9","chr11","chr13","chr12","chr15","chr16","chr17","chrY","chr18","chr19")
+
+# Generate random intervals in chromosomes matching the original enriched regions
+ df <- as.data.frame(enr_regions_filtered)
+
+
+# Define function creating random intervals on the same chromosomes as enriched regions, and with the same length
+random_interval_coord <- function(x){
+    
+       max_chr_length <- mm10_chrom_lengths[as.character(df[x, "seqnames"])] # Find chr length
+       
+       max_chr_length <- max_chr_length - df[x, "region_size"]  # Subtract region size
+       
+       random_start <- sample(1:max_chr_length, 1)   # Find random start
+       
+       # Construct GRanges interval. There must be a quicker way...
+       random_interval <- IRanges(start = random_start, 
+                                  end = random_start + (df[x, "region_size"] - 1))
+       
+       random_interval <- as.data.frame(random_interval)
+       random_interval$seqnames <- as.character(df[x, "seqnames"])
+       random_interval <- makeGRangesFromDataFrame(random_interval)
+       random_interval$region_size <- width(random_interval)
+       random_interval
+  
+}    
+    
+
+#random_interval_list <- lapply(1:nrow(df), function(x){random_interval_coord(x)})
+#random_intervals <- do.call(c, as(random_interval_list, "GRangesList"))
+#random_intervals
+
+#saveRDS(random_intervals, file = "./Permutation_analysis_objects/random_intervals.RDS")
+random_intervals <- readRDS("./Permutation_analysis_objects/random_intervals.RDS")
+
+
+#### Calculate enrichment using random intervals ###
+
+set.seed(1234)
+
+random_case_control_ratio <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(query = random_intervals[random_intervals$region_size < max_enr_region], 
+                                              subject = sample(mutations_cases, downsample_to), 
+                                              ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(query = random_intervals[random_intervals$region_size < max_enr_region], 
+                                                subject = sample(mutations_controls, downsample_to), 
+                                                ignore.strand=TRUE)
+
+
+    # Observed ratio of overlapping case / control mutation 
+    sum(reg_overlapping_case_mut > overlap_mut_count_thr) / 
+    sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+
+    }
+
+library(future.apply)
+plan(multisession, workers = 10)
+
+random_ratios_at_0 <- future_replicate(1000, random_case_control_ratio(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                               overlap_mut_count_thr = 0))
+
+
+random_ratios_at_1 <- future_replicate(1000, random_case_control_ratio(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                               overlap_mut_count_thr = 1))
+
+
+random_ratios_at_2 <- future_replicate(1000, random_case_control_ratio(downsample_to = 2500, 
+                                                                max_enr_region = 20000,
+                                                                overlap_mut_count_thr = 2))
+
+
+#mean(random_ratios_at_0) # 
+#mean(random_ratios_at_1[is.finite(random_ratios_at_1)]) #
+#mean(random_ratios_at_2[is.finite(random_ratios_at_2)]) # 
+
+
+
+### 
+
+#mean(observed_ratios_at_0) # 
+#mean(observed_ratios_at_1) #
+#mean(observed_ratios_at_2[is.finite(observed_ratios_at_2)]) # 
+
+
+    
+# Ok, so in principal it works. 
+# Now, let's generate a set o 1000 randomized intervals to use for determining a null distribution of cause/control mutational burden ratios
+
+
+# Why is this so slow???
+
+#start_time <- Sys.time()
+
+#randomized_intervals_1000 <- replicate(1000, {
+#    
+#    random_interval_list <- lapply(1:nrow(df), function(x){random_interval_coord(x)})
+#    random_intervals <- do.call(c, as(random_interval_list, "GRangesList"))
+#
+#    random_intervals    
+    
+#})
+
+#Sys.time() -start_time  # Time difference of 2.889646 mins for 3 replicates. 8.677542 for 10 replicates 1000 replicates would run for 16 h :/
+
+# saveRDS(randomized_intervals_1000, file = "randomized_intervals_1000.RData")
+
+
+if(file.exists("./Permutation_analysis_objects/randomized_intervals_1000.RData")){
+
+    randomized_intervals_1000 <- readRDS("randomized_intervals_1000.RData")    
+    
+}else{
+    
+
+# Paralelized approach. 
+
+    library(future.apply)
+    plan(multisession, workers = 10)
+
+    start_time <- Sys.time()
+
+    randomized_intervals_1000 <- future_replicate(1000, {
+    
+    random_interval_list <- lapply(1:nrow(df), function(x){random_interval_coord(x)})
+    random_intervals <- do.call(c, as(random_interval_list, "GRangesList"))
+
+    random_intervals    
+    
+    })
+
+    Sys.time() - start_time  # 1.021078 mins for 3 replicates. 2.563099 mins for 10 replicates. It scales much better.
+
+    saveRDS(randomized_intervals_1000, file = "./Permutation_analysis_objects/randomized_intervals_1000.RData")
+    
+}
+
+```
+
+
+
+```{r, eval=FALSE}
+
+### Calculate permutations over 1000 random intervals
+
+library(parallel)
+library(future.apply)
+plan(multisession, workers = 10)
+
+########### random ratios at above 0 mutations ###########
+
+random_ratios_at_0 <- future_lapply(1:1000, function(x){
+    
+    random_case_control_ratio <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_cases, downsample_to), 
+        ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_controls, downsample_to), 
+        ignore.strand=TRUE)
+
+
+    # Randomized interval overlap ratio of case / control mutation 
+    sum(reg_overlapping_case_mut > overlap_mut_count_thr) / 
+    sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+
+    }
+
+random_ratios_at_0 <- replicate(1000, random_case_control_ratio(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                               overlap_mut_count_thr = 0))
+
+random_ratios_at_0
+
+})
+
+saveRDS(random_ratios_at_0, file = "random_ratios_at_above_0_mutations.RData")
+
+
+
+########### random ratios at above 1 mutations ###########
+
+random_ratios_at_1 <- future_lapply(1:1000, function(x){
+    
+    random_case_control_ratio <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_cases, downsample_to), 
+        ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_controls, downsample_to), 
+        ignore.strand=TRUE)
+
+
+    # Randomized interval overlap ratio of case / control mutation 
+    sum(reg_overlapping_case_mut > overlap_mut_count_thr) / 
+    sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+
+    }
+
+random_ratios_at_1 <- replicate(1000, random_case_control_ratio(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                               overlap_mut_count_thr = 1))
+
+random_ratios_at_1
+
+})
+
+saveRDS(random_ratios_at_1, file = "random_ratios_at_above_1_mutations.RData")
+
+
+
+
+########### random ratios at above 2 mutations ###########
+
+random_ratios_at_2 <- future_lapply(1:1000, function(x){
+    
+    random_case_control_ratio <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_cases, downsample_to), 
+        ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_controls, downsample_to), 
+        ignore.strand=TRUE)
+
+
+    # Randomized interval overlap ratio of case / control mutation 
+    sum(reg_overlapping_case_mut > overlap_mut_count_thr) / 
+    sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+
+    }
+
+random_ratios_at_2 <- replicate(1000, random_case_control_ratio(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                               overlap_mut_count_thr = 2))
+
+random_ratios_at_2
+
+})
+
+saveRDS(random_ratios_at_2, file = "random_ratios_at_above_2_mutations.RData")
+
+
+
+### Calculate enrichment statistics
+
+# Question 1:
+# Is there a statistically significant difference between 
+# intersections observed in H3K27me3 enriched regions found in Kdm6b cKO
+# vs in random genomic regions on the same chromosomes, with matching intervals lengths
+# for case/control mutation overlap ratios. Test to determin mutation hotspots. 
+
+
+#mean(observed_ratios_at_0) # 
+#mean(observed_ratios_at_1) # 
+#mean(observed_ratios_at_2[is.finite(observed_ratios_at_2)]) #
+
+
+```
+
+
+```{r}
+
+# calculate mean over 1000 random intervals x 1000 mutation samplings
+# Excluding infinite values
+
+random_ratios_at_0 <- readRDS("./Permutation_analysis_objects/random_ratios_at_above_0_mutations.RData")
+random_ratios_at_1 <- readRDS("./Permutation_analysis_objects/random_ratios_at_above_1_mutations.RData")
+random_ratios_at_2 <- readRDS("./Permutation_analysis_objects/random_ratios_at_above_2_mutations.RData")
+
+
+
+
+random_ratios_at_0_over_int <- sapply(1:1000, function(x){
+    d <- random_ratios_at_0[[x]][is.finite(random_ratios_at_0[[x]])]
+    mean(d)
+    })
+
+
+
+random_ratios_at_1_over_int <- sapply(1:1000, function(x){
+    d <- random_ratios_at_1[[x]][is.finite(random_ratios_at_1[[x]])]
+    mean(d)
+    })
+
+
+
+random_ratios_at_2_over_int <- sapply(1:1000, function(x){
+    d <- random_ratios_at_2[[x]][is.finite(random_ratios_at_2[[x]])]
+    mean(d)
+    })
+
+
+# Random mean ratios. Infinite values are removed
+random_abv_0 <-  mean(random_ratios_at_0_over_int[is.finite(random_ratios_at_0_over_int)]) # 1.040862, 1000 values are finite
+random_abv_1 <-  mean(random_ratios_at_1_over_int[is.finite(random_ratios_at_1_over_int)]) # 1.308788, 996 values are finite 
+random_abv_2 <-  mean(random_ratios_at_2_over_int[is.finite(random_ratios_at_2_over_int)]) # 0.3931351, 583 values are finite
+
+random_abv_0_vector <-  random_ratios_at_0_over_int[is.finite(random_ratios_at_0_over_int)]
+random_abv_1_vector <-  random_ratios_at_1_over_int[is.finite(random_ratios_at_1_over_int)]
+random_abv_2_vector <-  random_ratios_at_2_over_int[is.finite(random_ratios_at_2_over_int)]
+
+
+
+### More than 0 mutations ###
+
+# Calculate Z scaled difference between observed and simulated difference
+Z_scaled_observed_vs_simulated <- (mean(observed_ratios_at_0) - mean(random_abv_0_vector)) / sd(random_abv_0_vector)
+
+
+# Z scaled difference between observed minus simulated
+#Z_scaled_observed_vs_simulated  # 0.003796478 standard deviations
+
+# P value
+perm_P <- pnorm(Z_scaled_observed_vs_simulated, lower.tail=FALSE)
+#perm_P      # 0.4984854
+
+
+
+
+### More than 1 mutations ###
+
+# Calculate Z scaled difference between observed and simulated difference
+Z_scaled_observed_vs_simulated <- (mean(observed_ratios_at_1) - mean(random_abv_1_vector)) / sd(random_abv_1_vector)
+
+
+# Z scaled difference between observed minus simulated
+#Z_scaled_observed_vs_simulated  # 0.3453726 standard deviations
+
+# P value
+perm_P <- pnorm(Z_scaled_observed_vs_simulated, lower.tail=FALSE)
+#perm_P      # 0.3649071
+
+
+
+
+
+### More than 2 mutations ###
+
+# Calculate Z scaled difference between observed and simulated difference
+Z_scaled_observed_vs_simulated <- (mean(observed_ratios_at_2[is.finite(observed_ratios_at_2)]) - mean(random_abv_2_vector)) / sd(random_abv_2_vector)
+
+
+# Z scaled difference between observed minus simulated
+#Z_scaled_observed_vs_simulated  # 9.138994 standard deviations
+
+# P value
+perm_P <- pnorm(Z_scaled_observed_vs_simulated, lower.tail=FALSE)
+#perm_P      # 3.151789e-20
+
+
+####
+
+
+distr_values <- data.frame(
+           "Observed_ab_0" = observed_ratios_at_0,
+           "Observed_ab_1" = observed_ratios_at_1,
+           "Observed_ab_2" = observed_ratios_at_2,
+           "Random_ab_0" = random_ratios_at_0_over_int,
+           "Random_ab_1" = random_ratios_at_1_over_int,
+           "Random_ab_2" = random_ratios_at_2_over_int)
+
+
+
+
+library(ggplot2)
+library(reshape2)
+
+distr_values_m <- melt(distr_values)
+distr_values_m$obs_rand <- ifelse(grepl("Observed", distr_values_m$variable), "Observed", "Rendom")
+distr_values_m$mut_threshold <- ifelse(grepl("0", distr_values_m$variable), "1", "")
+distr_values_m$mut_threshold <- ifelse(grepl("1", distr_values_m$variable), "2", distr_values_m$mut_threshold)
+distr_values_m$mut_threshold <- ifelse(grepl("2", distr_values_m$variable), "3", distr_values_m$mut_threshold)
+
+```
+
+```{r, fig.width=12, fig.height=6}
+
+    ggplot(distr_values_m, aes(x = value, color = obs_rand))+
+    geom_density()+
+    theme_bw()+
+    facet_wrap(.~mut_threshold)+
+    coord_cartesian(x = c(0, 7.5))+
+    labs(x = "Case / control mutation - H3K27me3 region intersection ratios [Z-scaled ratios]",
+         title = "Case / control mutation - H3K27me3 region intersection ratios across 3 ncSNV counts/region",
+         subtitle = " Facets represent minimum numbers of overlapping ncSNVs.\n 2500 ASD case and control ncSNVs were sampled 1000 times to adjust to for differences in statistical power\n Random intervals have the same length and are on the same chromosomes as the enriched intervals.\n 1000 random intervals were used for calculating intersections.")    
+        
+``` 
+
+
+
+
+
+## 2.2 Subtraction framework
+
+* This approach is similar to the ratiometric framework developed above. It calculates differences between the number of regions, H3K27me3-enriched or random genomic intervals, intersecting with ASD case and control ncSNVs. Distributions of values generated in this approach follow normal distribution. Enrichment testing is performed at three thresholds of ncSNV mutations per interval, >0, >1, and >2.      
+
+* 2500 ncSNVs are sampled 1000 times   
+
+* Enrichment P values are calculated on differences using pnorm.   
+
+* Cohen's D is used for determining effect size   
+
+* Counts of interval - ncSNV intersections are plotted to demonstrate the effect in a more intuitive way   
+
+
+```{r, eval=FALSE}
+
+# This analysis replaces ratios with differences. This eliminates dropouts caused by div by 0 and 0/0 ratios, keeping distributions normal. 
+
+set.seed(1234)
+
+observed_case_control_diff <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(query = enr_regions[enr_regions$region_size < max_enr_region], 
+                                              subject = sample(mutations_cases, downsample_to), 
+                                              ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(query = enr_regions[enr_regions$region_size < max_enr_region], 
+                                                subject = sample(mutations_controls, downsample_to), 
+                                                ignore.strand=TRUE)
+
+
+    # Observed ratio of overlapping case / control mutation 
+    sum(reg_overlapping_case_mut > overlap_mut_count_thr) - sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+
+    }
+
+
+observed_diff_at_0 <- replicate(1000, observed_case_control_diff(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                               overlap_mut_count_thr = 0))
+
+
+observed_diff_at_1 <- replicate(1000, observed_case_control_diff(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                               overlap_mut_count_thr = 1))
+
+
+observed_diff_at_2 <- replicate(1000, observed_case_control_diff(downsample_to = 2500, 
+                                                                     max_enr_region = 20000,
+                                                               overlap_mut_count_thr = 2))
+
+
+saveRDS(observed_diff_at_0, file = "./Permutation_analysis_objects/observed_diff_at_0.RDS")
+saveRDS(observed_diff_at_1, file = "./Permutation_analysis_objects/observed_diff_at_1.RDS")
+saveRDS(observed_diff_at_2, file = "./Permutation_analysis_objects/observed_diff_at_2.RDS")
+
+```
+
+```{r}
+
+observed_diff_at_0 <- readRDS("./Permutation_analysis_objects/observed_diff_at_0.RDS")
+observed_diff_at_1 <- readRDS("./Permutation_analysis_objects/observed_diff_at_1.RDS")
+observed_diff_at_2 <- readRDS("./Permutation_analysis_objects/observed_diff_at_2.RDS")
+
+
+
+#mean(observed_diff_at_0)  #
+#mean(observed_diff_at_1)  # 
+#mean(observed_diff_at_2)  #
+
+
+distr_diff <- data.frame(
+           "observed_diff_ab_1" = observed_diff_at_0,
+           "observed_diff_ab_2" = observed_diff_at_1,
+           "observed_diff_ab_3" = observed_diff_at_2
+           )
+     
+
+library(ggplot2)
+library(reshape2)
+
+distr_diff_m <- melt(distr_diff)
+
+distr_diff_m$obs_rand <- ifelse(grepl("observed", distr_diff_m$variable), "Observed", "Random")
+distr_diff_m$mut_threshold <- ifelse(grepl("1", distr_diff_m$variable), "1", "")
+distr_diff_m$mut_threshold <- ifelse(grepl("2", distr_diff_m$variable), "2", distr_diff_m$mut_threshold)
+distr_diff_m$mut_threshold <- ifelse(grepl("3", distr_diff_m$variable), "3", distr_diff_m$mut_threshold)
+
+
+### Random differences
+
+#    ggplot(distr_diff_m, aes(x = value, color = obs_rand))+
+#    geom_vline(xintercept = 0, color = "grey80")+
+#        geom_density()+
+#    theme_bw()+
+#    facet_wrap(.~mut_threshold)+
+#    coord_cartesian(x = c(-50, 50))+
+#    labs(x = "Case - control mutation intersections",
+#         title = "Case - control mutation intersection counts in H3K27me3 enriched regions",
+#         subtitle = " Facets represent minimum numbers of overlapping mutations.")    
+
+     
+###############################
+    
+########### random diff at above 0 mutations ###########
+
+if(file.exists("./Permutation_analysis_objects/random_diff_at_above_0_mutations.RData")){
+    
+    random_diff_at_0 <- readRDS("./Permutation_analysis_objects/random_diff_at_above_0_mutations.RData")
+    
+}else{
+    
+    random_diff_at_0 <- future_lapply(1:1000, function(x){
+    
+    random_case_control_diff <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_cases, downsample_to), 
+        ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_controls, downsample_to), 
+        ignore.strand=TRUE)
+
+
+    # Randomized interval overlap diffs of case - control mutation 
+    sum(reg_overlapping_case_mut > overlap_mut_count_thr) - sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+    }
+
+    random_diff_at_0 <- replicate(1000, random_case_control_diff(downsample_to = 2500,
+                                                             max_enr_region = 20000,
+                                                             overlap_mut_count_thr = 0))
+    random_diff_at_0
+
+    })
+
+    saveRDS(random_diff_at_0, file = "./Permutation_analysis_objects/random_diff_at_above_0_mutations.RData")
+        
+}
+
+
+
+########### random diff at above 1 mutations ###########
+
+
+if(file.exists("./Permutation_analysis_objects/random_diff_at_above_1_mutations.RData")){
+    
+    random_diff_at_1 <- readRDS("./Permutation_analysis_objects/random_diff_at_above_1_mutations.RData")
+    
+}else{    
+    
+    random_diff_at_1 <- future_lapply(1:1000, function(x){
+    
+    random_case_control_diff <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_cases, downsample_to), 
+        ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_controls, downsample_to), 
+        ignore.strand=TRUE)
+
+
+    # Randomized interval overlap diffs of case - control mutation 
+    sum(reg_overlapping_case_mut > overlap_mut_count_thr) - sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+
+    }
+
+    random_diff_at_1 <- replicate(1000, random_case_control_diff(downsample_to = 2500,
+                                                             max_enr_region = 20000,
+                                                             overlap_mut_count_thr = 1))
+
+    random_diff_at_1
+    })
+
+    saveRDS(random_diff_at_1, file = "./Permutation_analysis_objects/random_diff_at_above_1_mutations.RData")
+        
+}
+
+
+########### random diff at above 2 mutations ###########
+
+
+if(file.exists("./Permutation_analysis_objects/random_diff_at_above_2_mutations.RData")){
+    
+    random_diff_at_2 <- readRDS("./Permutation_analysis_objects/random_diff_at_above_2_mutations.RData")
+    
+}else{     
+    
+    random_diff_at_2 <- future_lapply(1:1000, function(x){
+    
+    random_case_control_diff <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_cases, downsample_to), 
+        ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_controls, downsample_to), 
+        ignore.strand=TRUE)
+
+
+    # Randomized interval overlap diffs of case - control mutation 
+    sum(reg_overlapping_case_mut > overlap_mut_count_thr) - sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+
+    }
+
+    random_diff_at_2 <- replicate(1000, random_case_control_diff(downsample_to = 2500,
+                                                             max_enr_region = 20000,
+                                                             overlap_mut_count_thr = 2))
+    random_diff_at_2
+    })
+
+    saveRDS(random_diff_at_2, file = "./Permutation_analysis_objects/random_diff_at_above_2_mutations.RData")
+
+}
+    
+#### Combine data
+random_diff_at_0_int_means <- sapply(1:1000, function(x){
+    d <- random_diff_at_0[[x]]
+    mean(d)
+    })
+
+
+random_diff_at_1_int_means <- sapply(1:1000, function(x){
+    d <- random_diff_at_1[[x]]
+    mean(d)
+    })
+
+
+random_diff_at_2_int_means <- sapply(1:1000, function(x){
+    d <- random_diff_at_2[[x]]
+    mean(d)
+    })
+
+
+distr_diff <- data.frame(
+           "observed_diff_ab_1" = observed_diff_at_0,
+           "observed_diff_ab_2" = observed_diff_at_1,
+           "observed_diff_ab_3" = observed_diff_at_2,
+           "random_diff_ab_1" = random_diff_at_0_int_means,
+           "random_diff_ab_2" = random_diff_at_1_int_means,
+           "random_diff_ab_3" = random_diff_at_2_int_means
+           )
+
+distr_diff_m <- melt(distr_diff)
+distr_diff_m$obs_rand <- ifelse(grepl("observed", distr_diff_m$variable), "Observed", "Rendom")
+distr_diff_m$mut_threshold <- ifelse(grepl("1", distr_diff_m$variable), "1", "")
+distr_diff_m$mut_threshold <- ifelse(grepl("2", distr_diff_m$variable), "2", distr_diff_m$mut_threshold)
+distr_diff_m$mut_threshold <- ifelse(grepl("3", distr_diff_m$variable), "3", distr_diff_m$mut_threshold)
+
+```
+
+    
+```{r, fig.width=12, fig.height=6}
+
+    ggplot(distr_diff_m, aes(x = value, color = obs_rand))+
+    geom_vline(xintercept = 0, color = "grey80")+
+    geom_density()+
+    theme_bw()+
+    facet_wrap(.~mut_threshold)+
+    coord_cartesian(x = c(-50, 50))+
+    xlim(-20, 40)+    
+    coord_cartesian(y = c(0, 0.5))+    
+    labs(x = "Case - control mutation intersection differences",
+         title = "Case - control mutation intersection counts in H3K27me3 enriched and random regions",
+         subtitle = " Facets represent minimum numbers of overlapping mutations.")    
+
+```
+
+
+```{r}
+
+### Calculate P values
+
+### At 1 and more mutation
+        
+# Calculate Z scaled difference between observed and simulated difference
+Z_scaled_observed_vs_simulated <- (mean(distr_diff$observed_diff_ab_1) - mean(distr_diff$random_diff_ab_1)) / sd(distr_diff$random_diff_ab_1)
+
+# Z scaled difference between observed minus simulated
+#Z_scaled_observed_vs_simulated  # 1.895966 standard deviations
+
+# P value
+perm_P <- pnorm(Z_scaled_observed_vs_simulated, lower.tail=FALSE)
+#perm_P      # 0.02898227
+
+#mean(distr_diff$observed_diff_ab_1) # 10.041
+#mean(distr_diff$random_diff_ab_1)   # 0.289913
+
+# Effect size:
+library(effsize)
+
+#cohen.d(distr_diff$observed_diff_ab_1, distr_diff$random_diff_ab_1)
+
+# Enrichment P value: 0.02898227
+# Cohen's d
+#
+#d estimate: 1.009761 (large)
+#95 percent confidence interval:
+#    lower     upper 
+#0.9166342 1.1028881 
+
+# On average, when compared to randomized genomic regions, there are 10 more H3k27me3 enriched regions intersecting with one or more case than control mutations (P = 0.029, Permutation test; Effect size, Cohen's d  = 1.01, 95% conf. int. 0.92-1.10). To account for differences in statistical power due to differences in the number of mutations, case and control mutations were subsampled to 2500, and averaged differences between overlap for cases and controls were calculated 1000 times. Null random distribution of was determined using the same mutation subsampling strategy, and 1000 set of random genomic intervals of equal length and on the same chromosomes as the enriched regions. 
+
+
+
+### At 2 and more mutation
+        
+# Calculate Z scaled difference between observed and simulated difference
+Z_scaled_observed_vs_simulated <- (mean(distr_diff$observed_diff_ab_2) - mean(distr_diff$random_diff_ab_2)) / sd(distr_diff$random_diff_ab_2)
+
+# Z scaled difference between observed minus simulated
+#Z_scaled_observed_vs_simulated  # 8.496693 standard deviations
+
+# P value
+perm_P <- pnorm(Z_scaled_observed_vs_simulated, lower.tail=FALSE)
+#perm_P      # 9.753452e-18 
+    
+#mean(distr_diff$observed_diff_ab_2) # 12.977
+#mean(distr_diff$random_diff_ab_2)   # -0.040332
+
+
+# Effect size:
+library(effsize)
+
+#cohen.d(distr_diff$observed_diff_ab_2, distr_diff$random_diff_ab_2)
+
+# Enrichment P value: 9.753452e-18
+# Cohen's d
+
+#d estimate: 3.074234 (large)
+#95 percent confidence interval:
+#   lower    upper 
+#2.944698 3.203770 
+
+
+# On average, when compared to randomized genomic regions, there are 13 more H3k27me3 enriched regions intersecting with two or more case than control mutations (P = 9.75e-18, Permutation test; Effect size, Cohen's d  = 3.07, 95% conf. int. 2.94-3.20). To account for differences in statistical power due to differences in the number of mutations, case and control mutations were subsampled to 2500, and averaged differences between overlap for cases and controls were calculated 1000 times. Null random distribution of was determined using the same mutation subsampling strategy, and 1000 set of random genomic intervals of equal length and on the same chromosomes as the enriched regions. 
+
+
+
+
+### At > 3 and more mutation
+        
+# Calculate Z scaled difference between observed and simulated difference
+Z_scaled_observed_vs_simulated <- (mean(distr_diff$observed_diff_ab_3) - mean(distr_diff$random_diff_ab_3)) / sd(distr_diff$random_diff_ab_3)
+
+# Z scaled difference between observed minus simulated
+#Z_scaled_observed_vs_simulated  # 8.491091 standard deviations
+
+# P value
+perm_P <- pnorm(Z_scaled_observed_vs_simulated, lower.tail=FALSE)
+#perm_P  # 1.023527e-17
+    
+#mean(distr_diff$observed_diff_ab_3) # 4.365
+#mean(distr_diff$random_diff_ab_3)   # -0.022802
+
+
+
+# Effect size:
+library(effsize)
+
+#cohen.d(distr_diff$observed_diff_ab_3, distr_diff$random_diff_ab_3)
+
+# Enrichment P value: 1.023527e-17
+#Cohen's d
+#
+#d estimate: 2.357284 (large)
+#95 percent confidence interval:
+#   lower    upper 
+#2.243112 2.471456 
+
+
+# On average, when compared to randomized genomic regions, there are 4.4  more H3k27me3 enriched regions intersecting with three or more case than control mutations (P = 1.024e-17, Permutation test; Effect size, Cohen's d  = 2.36, 95% conf. int. 2.24-2.47). To account for differences in statistical power due to differences in the number of mutations, case and control mutations were subsampled to 2500, and averaged differences between overlap for cases and controls were calculated 1000 times. Null random distribution of was determined using the same mutation subsampling strategy, and 1000 set of random genomic intervals of equal length and on the same chromosomes as the enriched regions. 
+
+effect_size_multiple_mut_df <- data.frame("Min_n_of_mut" = c(1,2,3),
+    
+                                          "Enrichment_P" = c(0.02898227, 9.753452e-18, 1.023527e-17),
+                                          "Mean_obs_mut_case_control_int_diff" = c(mean(distr_diff$observed_diff_ab_1),
+                                                                          mean(distr_diff$observed_diff_ab_2),
+                                                                          mean(distr_diff$observed_diff_ab_3)),
+                                          "Mean_rand_mut_case_control_int_diff" = c(mean(distr_diff$random_diff_ab_1),
+                                                                           mean(distr_diff$random_diff_ab_2),
+                                                                           mean(distr_diff$random_diff_ab_3)),
+                                          "Cohens_D" = c(cohen.d(distr_diff$observed_diff_ab_1, distr_diff$random_diff_ab_1)$estimate,
+                                                        cohen.d(distr_diff$observed_diff_ab_2, distr_diff$random_diff_ab_2)$estimate,
+                                                        cohen.d(distr_diff$observed_diff_ab_3, distr_diff$random_diff_ab_3)$estimate),
+                                          
+                                          "Lower_est" = c(cohen.d(distr_diff$observed_diff_ab_1, distr_diff$random_diff_ab_1)$conf.int[1],
+                                                        cohen.d(distr_diff$observed_diff_ab_2, distr_diff$random_diff_ab_2)$conf.int[1],
+                                                        cohen.d(distr_diff$observed_diff_ab_3, distr_diff$random_diff_ab_3)$conf.int[1]),
+                                          
+                                          "Upper_est" = c(cohen.d(distr_diff$observed_diff_ab_1, distr_diff$random_diff_ab_1)$conf.int[2],
+                                                        cohen.d(distr_diff$observed_diff_ab_2, distr_diff$random_diff_ab_2)$conf.int[2],
+                                                        cohen.d(distr_diff$observed_diff_ab_3, distr_diff$random_diff_ab_3)$conf.int[2])
+                                          )
+
+
+knitr::kable(effect_size_multiple_mut_df)
+
+
+#ggplot(effect_size_multiple_mut_df, aes(x = Min_n_of_mut, 
+#                                        y = Cohens_D))+
+#    geom_bar(stat = "identity")+
+#    theme_bw()+
+#    geom_errorbar(aes(ymin=Lower_est, ymax=Upper_est), width=.2,
+#                 position=position_dodge(.9))+
+#    labs(x = "Number of mutations per region",
+#         y = "ASD case mutation rate effect size [Cohen's D]"
+#         )
+    
+```
+
+
+
+### 2.2.1 Counts of H3K27me3 enriched regions and random intrevals intersecting with ASD case and control ncSNVs
+
+
+```{r, eval=FALSE}
+
+set.seed(1234)
+
+observed_case_control_reg_counts <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    # downsample_to = 2500
+    # max_enr_region = 20000
+    # overlap_mut_count_thr = 0
+    
+    reg_overlapping_case_mut <- countOverlaps(query = enr_regions[enr_regions$region_size < max_enr_region], 
+                                              subject = sample(mutations_cases, downsample_to), 
+                                              ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(query = enr_regions[enr_regions$region_size < max_enr_region], 
+                                                subject = sample(mutations_controls, downsample_to), 
+                                                ignore.strand=TRUE)
+
+
+    # Observed ratio of overlapping case / control mutation 
+    list(
+    data.frame(
+        "n_of_reg_w_n_case_mut" = sum(reg_overlapping_case_mut > overlap_mut_count_thr),
+        "n_of_reg_w_n_control_mut" = sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+        ))
+
+    }
+
+
+
+# What is this?
+# Counts of enriched filtered enriched regions intersecting with X number of ASD case or control mutations  
+
+observed_intersect_reg_counts_at_0_mut <- replicate(1000, observed_case_control_reg_counts(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                                    overlap_mut_count_thr = 0))
+
+
+
+
+observed_intersect_reg_counts_at_1_mut <- replicate(1000, observed_case_control_reg_counts(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                                    overlap_mut_count_thr = 1))
+
+
+
+
+observed_intersect_reg_counts_at_2_mut <- replicate(1000, observed_case_control_reg_counts(downsample_to = 2500,
+                                                                    max_enr_region = 20000,
+                                                                    overlap_mut_count_thr = 2))
+
+
+
+saveRDS(observed_intersect_reg_counts_at_0_mut, "./Permutation_analysis_objects/observed_intersect_reg_counts_at_0_mut")
+saveRDS(observed_intersect_reg_counts_at_1_mut, "./Permutation_analysis_objects/observed_intersect_reg_counts_at_1_mut")
+saveRDS(observed_intersect_reg_counts_at_2_mut, "./Permutation_analysis_objects/observed_intersect_reg_counts_at_2_mut")
+
+```
+
+
+```{r}
+
+observed_intersect_reg_counts_at_0_mut <- readRDS("./Permutation_analysis_objects/observed_intersect_reg_counts_at_0_mut")
+observed_intersect_reg_counts_at_1_mut <- readRDS("./Permutation_analysis_objects/observed_intersect_reg_counts_at_1_mut")
+observed_intersect_reg_counts_at_2_mut <- readRDS("./Permutation_analysis_objects/observed_intersect_reg_counts_at_2_mut")
+
+
+library(data.table)
+
+observed_intersect_reg_counts_at_0_mut <- rbindlist(observed_intersect_reg_counts_at_0_mut)
+observed_intersect_reg_counts_at_1_mut <- rbindlist(observed_intersect_reg_counts_at_1_mut)
+observed_intersect_reg_counts_at_2_mut <- rbindlist(observed_intersect_reg_counts_at_2_mut)
+
+###############  Random intersection region counts ###########
+
+# Iterates over 100 sets of random regions
+# Iterates over 1000 samples of mutations
+
+library(future)
+library(future.apply)
+plan(multisession, workers = 10)
+
+### > 0 mutations ###
+
+if(file.exists("random_intersect_reg_counts_at_0_mut.RData")){
+    
+    random_intersect_reg_counts_at_0_mut <- readRDS("random_intersect_reg_counts_at_0_mut.RData")
+    
+}else{     
+
+    random_intersect_reg_counts_at_0_mut <- future_lapply(1:100, function(x){
+    
+    random_case_control_diff <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_cases, downsample_to), 
+        ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_controls, downsample_to), 
+        ignore.strand=TRUE)
+
+
+    # Randomized interval overlap diffs of case - control mutation 
+     
+    list(
+        data.frame(
+            "n_of_rand_reg_w_n_case_mut" = sum(reg_overlapping_case_mut > overlap_mut_count_thr),
+            "n_of_rand_reg_w_n_control_mut" = sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+        ))
+    }
+
+    
+    random_intersect_counts_at_0 <- replicate(1000, random_case_control_diff(downsample_to = 2500,
+                                                             max_enr_region = 20000,
+                                                             overlap_mut_count_thr = 0))
+    random_intersect_counts_at_0
+    })
+    
+    saveRDS(random_intersect_reg_counts_at_0_mut, file = "random_intersect_reg_counts_at_0_mut.RData")
+
+}
+
+
+### > 1 mutations ###
+
+
+if(file.exists("random_intersect_reg_counts_at_1_mut.RData")){
+    
+    random_intersect_reg_counts_at_1_mut <- readRDS("random_intersect_reg_counts_at_1_mut.RData")
+    
+}else{     
+
+    random_intersect_reg_counts_at_1_mut <- future_lapply(1:100, function(x){
+    
+    random_case_control_diff <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_cases, downsample_to), 
+        ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_controls, downsample_to), 
+        ignore.strand=TRUE)
+
+
+    # Randomized interval overlap diffs of case - control mutation 
+     
+    list(
+        data.frame(
+            "n_of_rand_reg_w_n_case_mut" = sum(reg_overlapping_case_mut > overlap_mut_count_thr),
+            "n_of_rand_reg_w_n_control_mut" = sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+        ))
+    }
+
+    
+    random_intersect_counts_at_1 <- replicate(1000, random_case_control_diff(downsample_to = 2500,
+                                                             max_enr_region = 20000,
+                                                             overlap_mut_count_thr = 1))
+    random_intersect_counts_at_1
+    })
+
+    saveRDS(random_intersect_reg_counts_at_1_mut, file = "random_intersect_reg_counts_at_1_mut.RData")
+
+}
+
+
+
+### > 2 mutations ###
+
+if(file.exists("random_intersect_reg_counts_at_2_mut.RData")){
+    
+    random_intersect_reg_counts_at_2_mut <- readRDS("random_intersect_reg_counts_at_2_mut.RData")
+    
+}else{     
+
+    random_intersect_reg_counts_at_2_mut <- future_lapply(1:100, function(x){
+    
+    random_case_control_diff <- function(downsample_to, max_enr_region, overlap_mut_count_thr){
+    
+    reg_overlapping_case_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_cases, downsample_to), 
+        ignore.strand=TRUE)
+
+    reg_overlapping_control_mut <- countOverlaps(
+        query = randomized_intervals_1000[[x]][randomized_intervals_1000[[x]]$region_size < max_enr_region], 
+        subject = sample(mutations_controls, downsample_to), 
+        ignore.strand=TRUE)
+
+
+    # Randomized interval overlap diffs of case - control mutation 
+     
+    list(
+        data.frame(
+            "n_of_rand_reg_w_n_case_mut" = sum(reg_overlapping_case_mut > overlap_mut_count_thr),
+            "n_of_rand_reg_w_n_control_mut" = sum(reg_overlapping_control_mut > overlap_mut_count_thr)
+        ))
+
+    }
+    
+    random_intersect_counts_at_2 <- replicate(1000, random_case_control_diff(downsample_to = 2500,
+                                                             max_enr_region = 20000,
+                                                             overlap_mut_count_thr = 2))
+    random_intersect_counts_at_2
+    })
+
+
+saveRDS(random_intersect_reg_counts_at_2_mut, file = "random_intersect_reg_counts_at_2_mut.RData")
+
+}
+
+#observed_intersect_reg_counts_at_0_mut
+#observed_intersect_reg_counts_at_1_mut
+#observed_intersect_reg_counts_at_2_mut
+
+# Values represent the number of ntervals intersecting with case or control mutations >0, >1, >2 mutations 
+
+o_mut <- as.data.frame(cbind(observed_intersect_reg_counts_at_0_mut,
+               observed_intersect_reg_counts_at_1_mut,
+               observed_intersect_reg_counts_at_2_mut))
+
+colnames(o_mut) <- c("cases_1_mut_obs", "control_1_mut_obs", 
+                     "cases_2_mut_obs", "control_2_mut_obs",
+                     "cases_3_mut_obs", "control_3_mut_obs")
+
+
+# Combined intersections of 100 random interval sets x 1000 mutation samplings. Sampled 1000 rows to match with observed data.
+
+random_intersect_reg_counts_at_0_mut_sample <- 
+    
+   sample_n(as.data.frame(
+       rbindlist(lapply(1:100, function(x){
+           rbindlist(random_intersect_reg_counts_at_0_mut[[x]])}))), size = 1000)
+    
+    
+random_intersect_reg_counts_at_1_mut_sample <- 
+    
+   sample_n(as.data.frame(
+       rbindlist(lapply(1:100, function(x){
+           rbindlist(random_intersect_reg_counts_at_1_mut[[x]])}))), size = 1000)
+
+
+random_intersect_reg_counts_at_2_mut_sample <- 
+    
+   sample_n(as.data.frame(
+       rbindlist(lapply(1:100, function(x){
+           rbindlist(random_intersect_reg_counts_at_2_mut[[x]])}))), size = 1000)
+
+
+r_mut <- cbind(random_intersect_reg_counts_at_0_mut_sample,
+               random_intersect_reg_counts_at_1_mut_sample,
+               random_intersect_reg_counts_at_2_mut_sample)
+
+
+colnames(r_mut) <- c("cases_1_mut_rand", "control_1_mut_rand", 
+                     "cases_2_mut_rand", "control_2_mut_rand",
+                     "cases_3_mut_rand", "control_3_mut_rand") 
+
+
+or_mut <- cbind(o_mut, r_mut)
+or_mut_m <- melt(or_mut)    
+colnames(or_mut_m) <- c("variable", "overlap_count")
+
+or_mut_m$case_or_control <- ifelse(grepl("case", or_mut_m$variable), "Case", "Control")
+or_mut_m$observed_or_random <- ifelse(grepl("obs", or_mut_m$variable), "observed", "random")
+
+
+or_mut_m$n_of_mutations <- ifelse(grepl("1", or_mut_m$variable), "1", "")
+or_mut_m$n_of_mutations <- ifelse(grepl("2", or_mut_m$variable), "2", or_mut_m$n_of_mutations)
+or_mut_m$n_of_mutations <- ifelse(grepl("3", or_mut_m$variable), "3", or_mut_m$n_of_mutations)
+
+#head(or_mut_m)
+
+```
+
+
+```{r, fig.width=12, fig.height=8}
+
+# Including Randomized intersections:
+ggplot(or_mut_m, aes(x = variable, y = overlap_count, color = case_or_control))+
+    geom_jitter(alpha = 0.1)+
+    geom_violin(alpha = 0.7)+
+    theme_bw()+
+    theme(legend.title=element_blank())+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 12))+
+    #facet_grid(~n_of_mutations, scales = "free", space="free")+
+    facet_wrap(~n_of_mutations, scales = "free",
+               labeller = labeller(n_of_mutations = 
+                                       as_labeller(c("1" = ">0 mut. per region \n[P = 2.9e-02, Permutation test]", 
+                                                     "2" = ">1 mut. per region \n[P = 9.8e-18, Permutation test]",
+                                                     "3" = ">2 mut. per region \n[P = 1.0e-17, Permutation test]"))))+
+    labs(y = "Regions with intersecting mutations [counts]", x = "")+
+    scale_x_discrete(
+                  labels = c("cases_1_mut_obs" = "Cases Obs.", 
+                             "cases_1_mut_rand" = "Cases Rand.", 
+                             "control_1_mut_obs" = "Controls Obs.", 
+                             "control_1_mut_rand" = "Controls Rand.",
+                             
+                             "cases_2_mut_obs" = "Cases Obs.", 
+                             "cases_2_mut_rand" = "Cases Rand.", 
+                             "control_2_mut_obs" = "Controls Obs.", 
+                             "control_2_mut_rand" = "Controls Rand.",
+                             
+                             "cases_3_mut_obs" = "Cases Obs.", 
+                             "cases_3_mut_rand" = "Cases Rand.", 
+                             "control_3_mut_obs" = "Controls Obs.", 
+                             "control_3_mut_rand" = "Controls Rand."
+                             ))
+
+
+# Dropping randomized controls
+ggplot(filter(or_mut_m, observed_or_random == "observed"), aes(x = variable, y = overlap_count, color = case_or_control))+
+    geom_jitter(alpha = 0.1)+
+    geom_violin(alpha = 0.7)+
+    theme_bw()+
+    theme(legend.title=element_blank())+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 12))+
+    #facet_grid(~n_of_mutations, scales = "free", space="free")+
+    facet_wrap(~n_of_mutations, scales = "free",
+               labeller = labeller(n_of_mutations = 
+                                       as_labeller(c("1" = ">0 mut. per region \n[P = 2.9e-02, Permutation test]", 
+                                                     "2" = ">1 mut. per region \n[P = 9.8e-18, Permutation test]",
+                                                     "3" = ">2 mut. per region \n[P = 1.0e-17, Permutation test]"))))+
+    labs(y = "Regions with intersecting mutations [counts]", x = "")+
+    scale_x_discrete(
+                  labels = c("cases_1_mut_obs" = "Cases Obs.", 
+                             "cases_1_mut_rand" = "Cases Rand.", 
+                             "control_1_mut_obs" = "Controls Obs.", 
+                             "control_1_mut_rand" = "Controls Rand.",
+                             
+                             "cases_2_mut_obs" = "Cases Obs.", 
+                             "cases_2_mut_rand" = "Cases Rand.", 
+                             "control_2_mut_obs" = "Controls Obs.", 
+                             "control_2_mut_rand" = "Controls Rand.",
+                             
+                             "cases_3_mut_obs" = "Cases Obs.", 
+                             "cases_3_mut_rand" = "Cases Rand.", 
+                             "control_3_mut_obs" = "Controls Obs.", 
+                             "control_3_mut_rand" = "Controls Rand."
+                             ))
+
+```
+
+```{r, fig.width=4, fig.height=6}
+
+# Pair it with Cohen's D
+
+effect_size_multiple_mut_df$Min_n_of_mut <- ifelse(effect_size_multiple_mut_df$Min_n_of_mut == 1, 
+                                                   ">0 mut. per region", effect_size_multiple_mut_df$Min_n_of_mut)
+
+effect_size_multiple_mut_df$Min_n_of_mut <- ifelse(effect_size_multiple_mut_df$Min_n_of_mut == 2, 
+                                                   ">1 mut. per region", effect_size_multiple_mut_df$Min_n_of_mut)
+
+effect_size_multiple_mut_df$Min_n_of_mut <- ifelse(effect_size_multiple_mut_df$Min_n_of_mut == 3, 
+                                                   ">2 mut. per region", effect_size_multiple_mut_df$Min_n_of_mut)
+
+
+ggplot(effect_size_multiple_mut_df, aes(x = Min_n_of_mut, 
+                                        y = Cohens_D))+
+    geom_bar(stat = "identity")+
+    theme_bw()+
+    geom_errorbar(aes(ymin=Lower_est, ymax=Upper_est), width=.2,
+                 position=position_dodge(.9))+
+    labs(x = "",
+         y = "ASD case mutation rate effect size [Cohen's D]"
+         )
+    
+
+# 12271 - total number of mutations
+# 7821 - human mutation cases
+# 4448 - human mutation controls
+
+```
+
+
+# 3. Enrichment of ASD185 and Kdm6b down DE genes in the vicinity of H3K27me3 regions intersecting with ASD case over control ncSNVs 
+
+Construct a data frame / GRanges object including:   
+
+1. Coordinates of H3K27me3 regions   
+
+2. Coordinates of H3K27me3 regions expanded +/- 100kb each way   
+
+3. Gene names located within the expected this region   
+
+
+```{r}
+
+# The output is loaded from a file to speed up report generation
+if(file.exists("my_gene_annotation.RDS")){
+  
+  my_gene <- readRDS("./Permutation_analysis_objects/my_gene_annotation.RDS")
+  
+} else {
+
+
+# create ensemblGenome object for storing Ensembl genomic annotation data
+ens <- ensemblGenome()
+
+# read GTF file into ensemblGenome object. Must be in wd() - strange
+read.gtf(ens, "Mus_musculus.GRCm38.95.gtf")
+
+my_gene <- getGenePositions(ens) # dataframe with corresponding gene_id, gene_name, and other annotations
+
+}
+
+
+
+enr_regions_padded <- enr_regions + 10^5 # Expand by 100kb in each directions
+enr_regions_padded$region_size <- width(enr_regions_padded)
+# unique(enr_regions_padded$region_size - enr_regions$region_size) # 200000 # Sanity check Passed
+
+
+my_gene_filtered <- dplyr::filter(my_gene, seqid %in% c(1:19, "X", "Y"))
+my_gene_filtered$seqid <- paste0("chr", my_gene_filtered$seqid)
+my_gene_filtered$id <- NULL
+
+gtf <- makeGRangesFromDataFrame(my_gene_filtered, 
+                                keep.extra.columns = TRUE
+                                )
+
+
+overlap_regions <- as.data.frame(findOverlaps(
+                               query = enr_regions_padded,
+                               subject = gtf))
+
+
+# Construct a data frame consisting of the enriched region, expaned enriched region, and gene names within that region
+
+# Original enriched regions
+d <- enr_regions
+d <- GRanges(d[overlap_regions$queryHits])
+d$region_size <- width(d)
+d <- as.data.frame(d)
+
+d$region_ID <- paste0(d$seqnames, "_",
+                      d$start, "_",
+                      d$end)
+
+#head(d)
+
+
+# Add intersecting genes based on expended intervals
+d_w_gene <- data.frame(d, as.data.frame(gtf)[overlap_regions$subjectHits, c("seqnames", "start", "end", "width",  "strand",
+                                                  "gene_name", "gene_id", "gene_biotype")])
+
+colnames(d_w_gene) <- c("seqnames", "start", "end", "width", "strand", "region_size", "region_ID", 
+                        "seqnames_gene", "start_gene","end_gene", "width_gene", "strand_gene", "gene_name", "gene_id", "gene_biotype")
+    
+    
+# There are 31 enr regions not overlapping with any known genes. They have to be added
+d_full <- as.data.frame(enr_regions)
+
+d_full$region_ID <- paste0(d_full$seqnames, "_",
+                      d_full$start, "_",
+                      d_full$end)
+
+#head(d_full)
+
+# Add missing intervals
+dc <- merge(d_w_gene, d_full, by = c(colnames(d_full)), all = T)
+                                     
+# Sanityc check, PASSED. I confirmed that the interval  set differs by 31 between all set to T and F. 
+# dim(dc)
+# head(dc)
+
+enr_regions_exp_genes <- dc
+
+# I won't be adding the exp coordinates. It's just too confusing. and unnecessaty
+
+```
+
+
+Annotate if the original H3k27me3 enriched intervals (non expanded) intersect with case or control ncSNV mutations. Include mutation ID.
+
+```{r}
+
+# Intersections with mutations are NOT based on padded coordinates
+
+# Mutations cases
+overlap_with_mut_cases <- as.data.frame(findOverlaps(query = enr_regions,
+                                                     subject = mutations_cases))
+
+mutation_case_enr_int_match <- data.frame(
+    "enr_region" = enr_regions[overlap_with_mut_cases$queryHits,],   
+    "mutation_case" = mutations_cases[overlap_with_mut_cases$subjectHits,]    
+        
+)
+
+mutation_case_enr_int_match$region_ID <- paste0(mutation_case_enr_int_match$enr_region.seqnames, "_",
+                                                mutation_case_enr_int_match$enr_region.start, "_",
+                                                mutation_case_enr_int_match$enr_region.end)
+    
+    
+mutation_case_enr_int_match <- mutation_case_enr_int_match[,c("region_ID",
+                                                                    "mutation_case.ID",
+                                                                    "mutation_case.seqnames",
+                                                                    "mutation_case.start",
+                                                                    "mutation_case.end")]
+
+colnames(mutation_case_enr_int_match) <- c("region_ID", "mutation.ID", "mutation.seqnames", "mutation.start", "mutation.end")
+
+mutation_case_enr_int_match$mutation_type <- "Case"
+
+
+    
+
+# Chromosomes match - sanity check
+# all(mutation_case_enr_int_match$enr_region.seqnames == mutation_case_enr_int_match$mutation_case.seqnames) # TRUE
+
+# Mutations controls
+overlap_with_mut_controls <- as.data.frame(findOverlaps(query = enr_regions,
+                                                     subject = mutations_controls))
+
+mutation_control_enr_int_match <- data.frame(
+    "enr_region" = enr_regions[overlap_with_mut_controls$queryHits,],   
+    "mutation_control" = mutations_controls[overlap_with_mut_controls$subjectHits,]    
+        
+)
+
+mutation_control_enr_int_match$region_ID <- paste0(mutation_control_enr_int_match$enr_region.seqnames, "_",
+                                                mutation_control_enr_int_match$enr_region.start, "_",
+                                                mutation_control_enr_int_match$enr_region.end)
+
+
+
+
+mutation_control_enr_int_match <- mutation_control_enr_int_match[,c("region_ID",
+                                                                    "mutation_control.ID",
+                                                                    "mutation_control.seqnames",
+                                                                    "mutation_control.start",
+                                                                    "mutation_control.end")]
+
+colnames(mutation_control_enr_int_match) <- c("region_ID", "mutation.ID", "mutation.seqnames", "mutation.start", "mutation.end")
+
+mutation_control_enr_int_match$mutation_type <- "Control"
+
+
+###
+#mutation_case_enr_int_match
+#mutation_control_enr_int_match 
+
+# There are case and control mutations present in the same intervals 
+# table(mutation_case_enr_int_match$region_ID %in% mutation_control_enr_int_match $region_ID)
+# FALSE  TRUE 
+#   817   579 
+
+```    
+
+Merge mutation information
+```{r}
+
+#dim(enr_regions_exp_genes) #40608    15
+
+mmm_l <- merge(enr_regions_exp_genes, rbind(mutation_case_enr_int_match,
+                                   mutation_control_enr_int_match), by = "region_ID", all = TRUE)
+
+# dim(mmm_l) # 49509    20
+# length(unique(mmm_l$mutation.ID)) 2167 =  12265 + 6570 + 1 NA.
+
+
+```
+
+
+
+```{r, eval=FALSE}    
+
+#Case and control mutation counts. Just a sanity check here. Consider deleting    
+
+mutation_case_enr_int_match$mutation.ID %>%
+    unique() %>%
+    length()  # 1396
+
+
+
+mutation_control_enr_int_match$mutation.ID %>%
+    unique() %>%
+    length()  # 770
+
+
+# dplyr::filter(as.data.frame(enr_regions), region_size < 20000) %>% dim() # 3470
+# dplyr::filter(as.data.frame(enr_regions), region_size < 20000) %>% dim()
+# dim(enr_regions_exp_genes) # 40577    21
+
+
+length(unique(enr_regions_exp_genes$region_ID)) # 5318 
+
+```
+
+
+
+Annotate SFARI score 1 genes
+```{r}
+
+# Annotate SFARI genes
+SFARI_genes <- read.csv("./Permutation_analysis_objects/SFARI-Gene_genes_01-16-2024release_03-02-2024export.csv")
+
+# find orthologs
+
+# BiocManager::install("orthogene")
+
+library(orthogene)
+
+human_mouse_orthologs <- orthogene::convert_orthologs(gene_df = SFARI_genes,
+                             gene_input = "gene.symbol", 
+                             gene_output = "dict", 
+                             input_species = "human",
+                             output_species = "mouse",
+                             non121_strategy = "keep_both_species")
+
+human_mouse_orthologs <- data.frame("gene.symbol" = names(human_mouse_orthologs),
+           "Mouse_ortholog" = as.character(human_mouse_orthologs))
+
+
+#dim(SFARI_genes) # 1162   10
+
+#dim(human_mouse_orthologs) # 1145    2
+
+SFARI_genes <- merge(SFARI_genes, human_mouse_orthologs, all = T)
+
+SFARI_genes_score1 <- filter(SFARI_genes, gene.score %in% c(1)) 
+    
+    
+# Expanded regions overlap resulting in some genes being found multiple times
+# range(table(enr_regions_exp_genes$gene_name_gene))
+
+
+mmm_l$SFARI_gene <- mmm_l$gene_name %in% SFARI_genes_score1$Mouse_ortholog
+mmm_l$SFARI_gene_name <- ifelse(mmm_l$SFARI_gene == TRUE, mmm_l$gene_name, NA)
+
+```
+
+Annotate ASD72 and ASD185 genes
+
+```{r}
+
+# load("G:/Shared drives/Nord Lab - Computational Projects/Kdm6b_bulk_RNAseq/Session_dump_temp_6_04_2024.RData")
+# load("G:/Shared drives/Nord Lab - Computational Projects/Kdm6b_bulk_RNAseq/Session_dump_temp_7_02_2024.RData")
+
+library(readxl)
+
+# Supplementary table
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9653013/bin/NIHMS1844621-supplement-Supplementary_Table.xlsx
+
+## Fu et al. ASD gene sets
+fu <- na.omit(as.data.frame(read_excel("NIHMS1844621-supplement-Supplementary_Table.xlsx", sheet = 11)))
+
+# Fing mouse orthologs
+
+
+library(orthogene)
+
+rm(drop_both_species)
+human_mouse_orthologs <- orthogene::convert_orthologs(gene_df = fu[,2][!duplicated(fu[,2])],
+                             gene_input = "rownames", 
+                             gene_output = "rownames", 
+                             input_species = "human",
+                             output_species = "mouse",
+                             non121_strategy = 1)
+
+
+
+human_mouse_orthologs$Mouse_ortholog <- rownames(human_mouse_orthologs) 
+
+human_mouse_orthologs$index <- NULL
+rownames(human_mouse_orthologs) <- NULL
+
+colnames(human_mouse_orthologs) <- c("gene_gencodeV33", "Mouse_ortholog")
+
+#dim(fu) # 18128    27
+
+#dim(human_mouse_orthologs) # 1145 2
+
+fu <- merge(fu, human_mouse_orthologs, all = T)
+
+
+mmm_l$ASD72_gene <- mmm_l$gene_name %in% filter(fu, ASD72 == TRUE)$Mouse_ortholog
+mmm_l$ASD72_gene_name <- ifelse(mmm_l$ASD72_gene == TRUE, mmm_l$gene_name, NA)
+
+
+
+mmm_l$ASD185_gene <- mmm_l$gene_name %in% filter(fu, ASD185 == TRUE)$Mouse_ortholog
+mmm_l$ASD185_gene_name <- ifelse(mmm_l$ASD185_gene == TRUE, mmm_l$gene_name, NA)
+
+```
+
+Annotate Kdm6b down genes
+
+```{r}
+
+down_nonVZ <- read_xlsx("./Permutation_analysis_objects/Downregulated genes Kdm6b non_VZ downregulated.xlsx")
+down_nonVZ <- down_nonVZ[1]$`Genes passing p<0.05`[-c(1:3)]
+
+mmm_l$Kdm6b_down_gene <- mmm_l$gene_name %in% down_nonVZ
+mmm_l$Kdm6b_down_gene_name <- ifelse(mmm_l$Kdm6b_down_gene == TRUE, mmm_l$gene_name, NA)
+
+
+```
+
+
+## 3.1 ASD185 intersecting with case and control ncSNV in H3K27me3 regions
+
+```{r}
+
+# 
+mmm <- mmm_l
+
+# Add columns separating case and control mutation IDs
+mmm$mutation.ID_cases <- ifelse(mmm$mutation_type == "Case", mmm$mutation.ID, NA)
+mmm$mutation.ID_controls <- ifelse(mmm$mutation_type == "Control", mmm$mutation.ID, NA)
+mmm <- mmm[,c(1:16, 29, 30, 17:28)]
+#head(mmm[,16:18], 100)
+
+# length(unique(na.omit(mmm$region_ID)))  # 5318
+# length(unique(na.omit(mmm$mutation.ID_cases)))  # 1396
+# length(unique(na.omit(mmm$mutation.ID_controls))) # 770
+
+# Regions < 20 kb 
+# length(unique(na.omit(filter(mmm, width < 20000)$region_ID)))  # 3470
+# length(unique(na.omit(filter(mmm, width < 20000)$mutation.ID_cases)))  # 750
+# length(unique(na.omit(filter(mmm, width < 20000)$mutation.ID_controls))) # 383
+
+
+
+
+summarize_intersections <- function(min_n_mutation_case, min_n_mutation_control){
+    
+    mmm_counts <- mmm %>% 
+                filter(width < 20000) %>%
+                group_by(region_ID) %>% 
+                summarise(
+                    
+                    n_of_mutation_case = length(na.omit(unique(mutation.ID_cases))),
+                
+                    n_of_mutation_control = length(na.omit(unique(mutation.ID_controls))),
+                    
+                    n_of_SFARI_genes = length(na.omit(unique(SFARI_gene_name))),
+                    
+                    n_of_ASD72_genes = length(na.omit(unique(ASD72_gene_name))),
+                    
+                    n_of_ASD185_genes = length(na.omit(unique(ASD185_gene_name))),
+                    
+                    n_of_Kdm6b_down_genes = length(na.omit(unique(Kdm6b_down_gene_name)))
+                    
+                )
+  
+    
+    mmm_counts <- as.data.frame(mmm_counts)
+    
+    # Sanity check = PASSED
+    #head(arrange(mmm_counts, -n_of_ASD185_genes), 10)
+    # filter(mmm, region_ID == "chr11_69326000_69341999") 2 ASD genes and no mutations
+    # filter(mmm, region_ID == "chr11_77823000_77892999") 1  case mutations, 2 ASD genes
+    # filter(mmm, region_ID == "chr10_108326000_108338999") 2 mutations cases , 1 mut control, 0 ASD gene
+   
+   
+    # Region counts exclusive to a given category.
+    # These values correspond to those in Venn diagrams. 
+    # E.g. All regions intersectign with ASD genes are in:
+    # "ASD185" + "ASD185_and_mut_control" + "ASD185_and_mut_case" + "ASD185_and_mut_case_and_control" 
+    
+    # Write this for 1. ASD185 & mut case; 2. ASD185 & mut control, 3. Kdm6b & mut case 4. Kdm6b & mut control
+    # Then adapt for permutation testing
+    
+    # This is summarizing ASD185and mut case and mut controls interactions
+    mmm_counts$mmm_class <- ifelse(mmm_counts$n_of_ASD185_genes > 0, "ASD185", "No_intersection")
+
+    mmm_counts$mmm_class <- ifelse(mmm_counts$n_of_mutation_case > min_n_mutation_case, 
+                                   "mut_case", mmm_counts$mmm_class)
+    
+    mmm_counts$mmm_class <- ifelse(mmm_counts$n_of_mutation_control > min_n_mutation_control, 
+                                   "mut_control", mmm_counts$mmm_class)
+
+    mmm_counts$mmm_class <- ifelse(mmm_counts$n_of_ASD185_genes > 0 &
+                    mmm_counts$n_of_mutation_case > min_n_mutation_case, "ASD185_and_mut_case", mmm_counts$mmm_class)
+    
+    mmm_counts$mmm_class <- ifelse(mmm_counts$n_of_ASD185_genes > 0 &
+                    mmm_counts$n_of_mutation_control > min_n_mutation_control, "ASD185_and_mut_control", mmm_counts$mmm_class)
+    
+    mmm_counts$mmm_class <- ifelse(mmm_counts$n_of_ASD185_genes > 0 &
+                    mmm_counts$n_of_mutation_control > min_n_mutation_control &
+                    mmm_counts$n_of_mutation_case > min_n_mutation_case, "ASD185_and_mut_case_and_control", mmm_counts$mmm_class)
+    
+    int_counts <- as.data.frame(table(mmm_counts$mmm_class))
+
+    int_counts$Var1 <- factor(int_counts$Var1, levels = c("ASD185", "mut_control", "mut_case", 
+                                                          "ASD185_and_mut_control", "ASD185_and_mut_case",
+                                                          "ASD185_and_mut_case_and_control", "No_intersection"))
+    int_counts <- arrange(int_counts, Var1)
+    int_counts
+    
+    # Collect region IDs for reliable counting of e.g. ASD genes & mut_case intervals. This is collecting interval IDs of sigle categories. e.g. all intervals with ASD mutations, or all intervalse with mut cases etc. They can be directly used for plotting Venn diagrams.
+    
+    Int_IDs <- list("Mut_case_regIDs" = unique(filter(mmm_counts, n_of_mutation_case > min_n_mutation_case)$region_ID),
+                    "Mut_control_regIDs" = unique(filter(mmm_counts, n_of_mutation_control > min_n_mutation_control)$region_ID),
+                    "SFARI_regIDs" = unique(filter(mmm_counts, n_of_SFARI_genes > 0)$region_ID),
+                    "ASD72_regIDs" = unique(filter(mmm_counts, n_of_ASD72_genes > 0)$region_ID),
+                    "ASD185_regIDs" = unique(filter(mmm_counts, n_of_ASD185_genes > 0)$region_ID),
+                    "Kdm6b_down_regIDs" = unique(filter(mmm_counts, n_of_Kdm6b_down_genes > 0)$region_ID),
+                    "All_regIDs" = unique(mmm_counts$region_ID)
+                    )
+    
+    # Count double hits 
+    
+    double_hit_counts <- data.frame("ASD185_and_case_mut" = length(intersect(Int_IDs$ASD185_regIDs, Int_IDs$Mut_case_regIDs)),
+                                    "ASD185_and_control_mut" = length(intersect(Int_IDs$ASD185_regIDs, Int_IDs$Mut_control_regIDs)),
+                                    "Kdm6b_down_and_case_mut" = length(intersect(Int_IDs$Kdm6b_down_regIDs, Int_IDs$Mut_case_regIDs)),
+                                    "Kdm6b_down_and_control_mut" = length(intersect(Int_IDs$Kdm6b_down_regIDs, Int_IDs$Mut_control_regIDs)))
+    
+    
+    list(int_counts, 
+         Int_IDs,
+         double_hit_counts)
+    
+}
+
+
+#knitr::kable(summarize_intersections(min_n_mutation_case = 0, 
+#                        min_n_mutation_control = 0)[[1]])
+
+
+
+#knitr::kable(summarize_intersections(min_n_mutation_case = 1, 
+#                        min_n_mutation_control = 1)[[1]])
+
+
+#knitr::kable(summarize_intersections(min_n_mutation_case = 2, 
+#                        min_n_mutation_control = 2)[[1]])
+
+```
+
+## 3.2 Summarize counts of mutations - gene sets double hits
+```{r}
+
+# Double hit counts
+
+x1 <- summarize_intersections(min_n_mutation_case = 0, 
+                        min_n_mutation_control = 0)[[3]]
+
+
+x2 <- summarize_intersections(min_n_mutation_case = 1, 
+                        min_n_mutation_control = 1)[[3]]
+
+
+x3 <- summarize_intersections(min_n_mutation_case = 2, 
+                        min_n_mutation_control = 2)[[3]]
+
+
+#melt(x1)
+#melt(x2)
+#melt(x3)
+
+obs_double_hits <- data.frame("Double_hit" = as.character(reshape2::melt(x1)[,1]),
+           "Above_0_mut" = as.numeric(reshape2::melt(x1)[,2]),
+           "Above_1_mut" = as.numeric(reshape2::melt(x2)[,2]),
+           "Above_2_mut" = as.numeric(reshape2::melt(x3)[,2])
+           )
+
+knitr::kable(obs_double_hits)
+```
+
+
+H3k27me3 enriched regions intersecting with:   
+1. ASD case or control ncSNVs,   
+2. ASD185 genes,   
+3. Kdm6b down DE genes.   
+
+```{r, fig.width=16, fig.height=6}
+
+### Mut > 0
+
+comparisons <- c("Mut_case_regIDs", 
+                  "ASD185_regIDs", "Kdm6b_down_regIDs")
+
+
+x <- summarize_intersections(min_n_mutation_case = 0, 
+                        min_n_mutation_control = 0)[[2]]
+
+
+p1 <- ggVennDiagram(x[comparisons], 
+              label_alpha = 0, label_size = 6, auto_scale = TRUE, set_size = 4, label = "count")+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")+
+  ggplot2::labs(title = "Mut. threshold > 0")+
+  ggplot2::theme(plot.title = element_text(size=12))
+    
+
+
+
+### Mut > 1
+
+x <- summarize_intersections(min_n_mutation_case = 1, 
+                        min_n_mutation_control = 1)[[2]]
+
+
+p2 <- ggVennDiagram(x[comparisons], 
+              label_alpha = 0, label_size = 6, auto_scale = TRUE, set_size = 4, label = "count")+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")+
+  ggplot2::labs(title = "Mut. threshold > 1")+
+  ggplot2::theme(plot.title = element_text(size=12))
+
+
+
+### Mut > 2
+
+x <- summarize_intersections(min_n_mutation_case = 2, 
+                        min_n_mutation_control = 2)[[2]]
+
+
+p3 <- ggVennDiagram(x[comparisons], 
+              label_alpha = 0, label_size = 6, auto_scale = TRUE, set_size = 4, label = "count")+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")+
+  ggplot2::labs(title = "Mut. threshold > 2")+
+  ggplot2::theme(plot.title = element_text(size=12))
+
+
+p1 + p2 + p3
+
+```
+
+
+```{r, fig.width=16, fig.height=6}
+
+### Mut > 0
+
+comparisons <- c("Mut_control_regIDs", 
+                  "ASD185_regIDs", "Kdm6b_down_regIDs")
+
+
+x <- summarize_intersections(min_n_mutation_case = 0, 
+                        min_n_mutation_control = 0)[[2]]
+
+
+p1 <- ggVennDiagram(x[comparisons], 
+              label_alpha = 0, label_size = 6, auto_scale = TRUE, set_size = 4, label = "count")+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")+
+  ggplot2::labs(title = "Mut. threshold > 0")+
+  ggplot2::theme(plot.title = element_text(size=12))
+    
+
+
+
+### Mut > 1
+
+x <- summarize_intersections(min_n_mutation_case = 1, 
+                        min_n_mutation_control = 1)[[2]]
+
+
+p2 <- ggVennDiagram(x[comparisons], 
+              label_alpha = 0, label_size = 6, auto_scale = TRUE, set_size = 4, label = "count")+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")+
+  ggplot2::labs(title = "Mut. threshold > 1")+
+  ggplot2::theme(plot.title = element_text(size=12))
+
+
+
+### Mut > 2
+
+x <- summarize_intersections(min_n_mutation_case = 2, 
+                        min_n_mutation_control = 2)[[2]]
+
+
+p3 <- ggVennDiagram(x[comparisons], 
+              label_alpha = 0, label_size = 6, auto_scale = TRUE, set_size = 4, label = "count")+
+  ggplot2::scale_fill_gradient(low="white",high = "orange")+
+  ggplot2::labs(title = "Mut. threshold > 2")+
+  ggplot2::theme(plot.title = element_text(size=12))
+
+
+p1 + p2 + p3
+
+```
+
+
+
+Randomize assignment of mutations to genes. Generate a null distribution for enrichment testing.
+
+```{r}
+
+
+summarize_intersections_random_double_hits <- function(min_n_mutation_case, min_n_mutation_control){
+    
+    mmm_counts <- mmm %>% 
+                filter(width < 20000) %>%
+                group_by(region_ID) %>% 
+                summarise(
+                    
+                    n_of_mutation_case = length(na.omit(unique(mutation.ID_cases))),
+                
+                    n_of_mutation_control = length(na.omit(unique(mutation.ID_controls))),
+                    
+                    n_of_SFARI_genes = length(na.omit(unique(SFARI_gene_name))),
+                    
+                    n_of_ASD72_genes = length(na.omit(unique(ASD72_gene_name))),
+                    
+                    n_of_ASD185_genes = length(na.omit(unique(ASD185_gene_name))),
+                    
+                    n_of_Kdm6b_down_genes = length(na.omit(unique(Kdm6b_down_gene_name)))
+                    
+                )
+    
+
+    mmm_counts <- as.data.frame(mmm_counts)
+    
+    mmm_counts$n_of_mutation_case <- sample(mmm_counts$n_of_mutation_case)
+    mmm_counts$n_of_mutation_control <- sample(mmm_counts$n_of_mutation_control)
+    mmm_counts$n_of_SFARI_genes <- sample(mmm_counts$n_of_SFARI_genes)
+    mmm_counts$n_of_ASD72_genes <- sample(mmm_counts$n_of_ASD72_genes)
+    mmm_counts$n_of_ASD185_genes <- sample(mmm_counts$n_of_ASD185_genes)
+    mmm_counts$n_of_Kdm6b_down_genes <- sample(mmm_counts$n_of_Kdm6b_down_genes)
+  
+    
+    Int_IDs <- list("Mut_case_regIDs" = unique(filter(mmm_counts, n_of_mutation_case > min_n_mutation_case)$region_ID),
+                    "Mut_control_regIDs" = unique(filter(mmm_counts, n_of_mutation_control > min_n_mutation_control)$region_ID),
+                    "SFARI_regIDs" = unique(filter(mmm_counts, n_of_SFARI_genes > 0)$region_ID),
+                    "ASD72_regIDs" = unique(filter(mmm_counts, n_of_ASD72_genes > 0)$region_ID),
+                    "ASD185_regIDs" = unique(filter(mmm_counts, n_of_ASD185_genes > 0)$region_ID),
+                    "Kdm6b_down_regIDs" = unique(filter(mmm_counts, n_of_Kdm6b_down_genes > 0)$region_ID),
+                    "All_regIDs" = unique(mmm_counts$region_ID)
+                    )
+    
+    # Count double hits 
+    
+    double_hit_counts_randomized <- data.frame("ASD185_and_case_mut" = length(intersect(Int_IDs$ASD185_regIDs, Int_IDs$Mut_case_regIDs)),
+                                    "ASD185_and_control_mut" = length(intersect(Int_IDs$ASD185_regIDs, Int_IDs$Mut_control_regIDs)),
+                                    "Kdm6b_down_and_case_mut" = length(intersect(Int_IDs$Kdm6b_down_regIDs, Int_IDs$Mut_case_regIDs)),
+                                    "Kdm6b_down_and_control_mut" = length(intersect(Int_IDs$Kdm6b_down_regIDs, Int_IDs$Mut_control_regIDs)))
+    
+    
+ 
+        
+    double_hit_counts_randomized
+    
+}
+```
+
+```{r, eval=FALSE}
+
+library(future.apply)
+plan(multisession, workers = 14)
+
+rand_double_hits_0_mut <- future_replicate(1000, summarize_intersections_random_double_hits(
+                                    min_n_mutation_case = 0, 
+                                    min_n_mutation_control = 0),
+                                simplify = F)
+
+
+rand_double_hits_1_mut <- future_replicate(1000, summarize_intersections_random_double_hits(
+                                    min_n_mutation_case = 1, 
+                                    min_n_mutation_control = 1),
+                                simplify = F)
+
+rand_double_hits_2_mut <- future_replicate(1000, summarize_intersections_random_double_hits(
+                                    min_n_mutation_case = 2, 
+                                    min_n_mutation_control = 2),
+                                simplify = F)
+
+
+ASD185_and_case_0_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_0_mut[[x]]$ASD185_and_case_mut})
+ASD185_and_control_0_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_0_mut[[x]]$ASD185_and_control_mut})
+Kdm6b_down_and_case_0_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_0_mut[[x]]$Kdm6b_down_and_case_mut})
+Kdm6b_down_and_control_0_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_0_mut[[x]]$Kdm6b_down_and_control_mut})
+
+
+ASD185_and_case_1_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_1_mut[[x]]$ASD185_and_case_mut})
+ASD185_and_control_1_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_1_mut[[x]]$ASD185_and_control_mut})
+Kdm6b_down_and_case_1_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_1_mut[[x]]$Kdm6b_down_and_case_mut})
+Kdm6b_down_and_control_1_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_1_mut[[x]]$Kdm6b_down_and_control_mut})
+
+ASD185_and_case_2_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_2_mut[[x]]$ASD185_and_case_mut})
+ASD185_and_control_2_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_2_mut[[x]]$ASD185_and_control_mut})
+Kdm6b_down_and_case_2_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_2_mut[[x]]$Kdm6b_down_and_case_mut})
+Kdm6b_down_and_control_2_mut_NULL <- future_sapply(1:1000, function(x){rand_double_hits_2_mut[[x]]$Kdm6b_down_and_control_mut})
+
+
+saveRDS(list(ASD185_and_case_0_mut_NULL,
+             ASD185_and_control_0_mut_NULL,
+             Kdm6b_down_and_case_0_mut_NULL,
+             Kdm6b_down_and_control_0_mut_NULL,
+             
+             ASD185_and_case_1_mut_NULL,
+             ASD185_and_control_1_mut_NULL,
+             Kdm6b_down_and_case_1_mut_NULL,
+             Kdm6b_down_and_control_1_mut_NULL,
+             
+             ASD185_and_case_2_mut_NULL,
+             ASD185_and_control_2_mut_NULL,
+             Kdm6b_down_and_case_2_mut_NULL,
+             Kdm6b_down_and_control_2_mut_NULL
+             ), 
+        
+        file = "./Permutation_analysis_objects/ASD185_and_Kdm6b_down_NULL_intersections.RDS")
+
+
+```
+
+```{r}
+
+ASD185_and_Kdm6b_down_NULL_intersections <- readRDS("./Permutation_analysis_objects/ASD185_and_Kdm6b_down_NULL_intersections.RDS")
+
+
+ASD185_and_case_0_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[1]]
+ASD185_and_control_0_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[2]]
+Kdm6b_down_and_case_0_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[3]]
+Kdm6b_down_and_control_0_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[4]]
+             
+ASD185_and_case_1_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[5]]
+ASD185_and_control_1_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[6]]
+Kdm6b_down_and_case_1_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[7]]
+Kdm6b_down_and_control_1_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[8]]
+             
+ASD185_and_case_2_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[9]]
+ASD185_and_control_2_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[10]]
+Kdm6b_down_and_case_2_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[11]]
+Kdm6b_down_and_control_2_mut_NULL <- ASD185_and_Kdm6b_down_NULL_intersections[[12]]
+
+
+#mean(ASD185_and_case_0_mut_NULL)    
+#mean(ASD185_and_control_0_mut_NULL)
+#mean(Kdm6b_down_and_case_0_mut_NULL)
+#mean(Kdm6b_down_and_control_0_mut_NULL)
+    
+```
+
+```{r}
+
+rownames(obs_double_hits) <- obs_double_hits$Double_hit
+obs_double_hits$Double_hit <- NULL
+
+#knitr::kable(obs_double_hits)
+
+```
+
+## 3.3 Permutation test for the enrichment of ASD case over control ncSNVs and ASD185 or Kdm6b down genes 
+
+```{r}
+
+double_hit_permutation <- function(observed_hits, positive_rand_hits, title_phrase, mut_thr){
+    
+    #observed_hits = obs_double_hits["ASD185_and_case_mut", "Above_0_mut"]
+    #positive_rand_hits <- ASD185_and_case_0_mut_NULL
+    #title_phrase = "ASD185 genes and case mutations"
+    #mut_thr = 0
+
+    # Z score of enrichment in the significant group
+    Significant_Z_scaled <- (observed_hits - mean(positive_rand_hits)) / sd(positive_rand_hits)
+
+
+    # lower.tail=FALSE, because I'm testing the significance at the upper end of the distribution 
+    # (enrichment not depletion)
+    perm_P <- pnorm(Significant_Z_scaled, lower.tail=FALSE)
+    
+   
+    
+    # Plot enrichment and the underlying distribution 
+    df <- data.frame("sums_of_perm" = positive_rand_hits)
+    
+    plot0 <- ggplot()+
+        geom_density(data = df, aes(x = scale(sums_of_perm)))+
+        theme_bw()+
+        geom_vline(xintercept = Significant_Z_scaled, colour = "red", linetype = 2)+
+        theme(plot.title = element_text(size=16))+
+        theme(plot.subtitle = element_text(size=14))+
+        labs(
+            title = paste0("Enrichment of intersections between \n", title_phrase, " in H3K27me3 enr. reg."),
+            subtitle = paste0(" N of mutations > ", mut_thr,
+                           "\n n of observed double hits: ", observed_hits,
+                           "\n mean n of randomized double hits: ", mean(positive_rand_hits),
+                           "\n Permutation test P: ", round(perm_P, 6))
+            
+         
+         )
+    
+    plot0
+    
+}
+
+```
+
+### 3.3.1 ASD185
+
+```{r, fig.width=16, fig.height=13}
+
+#### ASD185 - mutations
+
+p1 <- double_hit_permutation(observed_hits = obs_double_hits["ASD185_and_control_mut", "Above_0_mut"], 
+                       positive_rand_hits = ASD185_and_control_0_mut_NULL, 
+                       title_phrase = "ASD185 genes and control mutations", 
+                       mut_thr = 0)
+
+p2 <- double_hit_permutation(observed_hits = obs_double_hits["ASD185_and_case_mut", "Above_0_mut"], 
+                       positive_rand_hits = ASD185_and_case_0_mut_NULL, 
+                       title_phrase = "ASD185 genes and case mutations", 
+                       mut_thr = 0)
+
+
+p3 <- double_hit_permutation(observed_hits = obs_double_hits["ASD185_and_control_mut", "Above_1_mut"], 
+                       positive_rand_hits = ASD185_and_control_1_mut_NULL, 
+                       title_phrase = "ASD185 genes and control mutations", 
+                       mut_thr = 1)
+
+p4 <- double_hit_permutation(observed_hits = obs_double_hits["ASD185_and_case_mut", "Above_1_mut"], 
+                       positive_rand_hits = ASD185_and_case_1_mut_NULL, 
+                       title_phrase = "ASD185 genes and case mutations", 
+                       mut_thr = 1)
+
+
+
+p5 <- double_hit_permutation(observed_hits = obs_double_hits["ASD185_and_control_mut", "Above_2_mut"], 
+                       positive_rand_hits = ASD185_and_control_2_mut_NULL, 
+                       title_phrase = "ASD185 genes and control mutations", 
+                       mut_thr = 2)
+
+p6 <- double_hit_permutation(observed_hits = obs_double_hits["ASD185_and_case_mut", "Above_2_mut"], 
+                       positive_rand_hits = ASD185_and_case_2_mut_NULL, 
+                       title_phrase = "ASD185 genes and case mutations", 
+                       mut_thr = 2)
+
+plot_grid(
+    plot_grid(p1, p2, ncol = 1), 
+    plot_grid(p3, p4, ncol = 1), 
+    plot_grid(p5, p6, ncol = 1), ncol = 3)
+
+
+
+```
+
+### 3.3.2 Kdm6b down DE genes
+
+```{r, fig.width=16, fig.height=13}
+
+#### Kdm6b - mutations
+
+p1 <- double_hit_permutation(observed_hits = obs_double_hits["Kdm6b_down_and_control_mut", "Above_0_mut"], 
+                       positive_rand_hits = Kdm6b_down_and_control_0_mut_NULL, 
+                       title_phrase = "Kdm6b down non VZ genes and control mutations", 
+                       mut_thr = 0)
+
+p2 <- double_hit_permutation(observed_hits = obs_double_hits["Kdm6b_down_and_case_mut", "Above_0_mut"], 
+                       positive_rand_hits = Kdm6b_down_and_case_0_mut_NULL, 
+                       title_phrase = "Kdm6b down non VZ genes and case mutations", 
+                       mut_thr = 0)
+
+
+p3 <- double_hit_permutation(observed_hits = obs_double_hits["Kdm6b_down_and_control_mut", "Above_1_mut"], 
+                       positive_rand_hits = Kdm6b_down_and_control_1_mut_NULL, 
+                       title_phrase = "Kdm6b down non VZ genes and control mutations", 
+                       mut_thr = 1)
+
+p4 <- double_hit_permutation(observed_hits = obs_double_hits["Kdm6b_down_and_case_mut", "Above_1_mut"], 
+                       positive_rand_hits = Kdm6b_down_and_case_1_mut_NULL, 
+                       title_phrase = "Kdm6b down non VZ genes and case mutations", 
+                       mut_thr = 1)
+
+
+
+p5 <- double_hit_permutation(observed_hits = obs_double_hits["Kdm6b_down_and_control_mut", "Above_2_mut"], 
+                       positive_rand_hits = Kdm6b_down_and_control_2_mut_NULL, 
+                       title_phrase = "Kdm6b down non VZ genes and control mutations", 
+                       mut_thr = 2)
+
+p6 <- double_hit_permutation(observed_hits = obs_double_hits["Kdm6b_down_and_case_mut", "Above_2_mut"], 
+                       positive_rand_hits = Kdm6b_down_and_case_2_mut_NULL, 
+                       title_phrase = "Kdm6b down non VZ genes and case mutations", 
+                       mut_thr = 2)
+
+plot_grid(
+    plot_grid(p1, p2, ncol = 1), 
+    plot_grid(p3, p4, ncol = 1), 
+    plot_grid(p5, p6, ncol = 1), ncol = 3)
+
+
+
+# save.image("G:/Shared drives/Nord Lab - Computational Projects/Kdm6b_bulk_RNAseq/Session_dump_temp_7_12_2024.RData")
+
+# load("G:/Shared drives/Nord Lab - Computational Projects/Kdm6b_bulk_RNAseq/Session_dump_temp_7_12_2024.RData")
+```
+
+## 3.4 Other summary statistics
+
+```{r}
+
+# Write supplementary tables
+
+mmm <- mmm_l
+
+# Add columns separating case and control mutation IDs
+mmm$mutation.ID_cases <- ifelse(mmm$mutation_type == "Case", mmm$mutation.ID, NA)
+mmm$mutation.ID_controls <- ifelse(mmm$mutation_type == "Control", mmm$mutation.ID, NA)
+mmm <- mmm[,c(1:16, 29, 30, 17:28)]
+#head(mmm[,16:18], 100)
+
+mmm_counts <- mmm %>% 
+                filter(width < 20000) %>%
+                group_by(region_ID) %>% 
+                summarise(
+                    
+                    n_of_mutation_case = length(na.omit(unique(mutation.ID_cases))),
+                
+                    n_of_mutation_control = length(na.omit(unique(mutation.ID_controls))),
+                    
+                    n_of_SFARI_genes = length(na.omit(unique(SFARI_gene_name))),
+                    
+                    n_of_ASD72_genes = length(na.omit(unique(ASD72_gene_name))),
+                    
+                    n_of_ASD185_genes = length(na.omit(unique(ASD185_gene_name))),
+                    
+                    n_of_Kdm6b_down_genes = length(na.omit(unique(Kdm6b_down_gene_name)))
+                    
+                )
+
+
+write.csv(mmm, file = "./Permutation_analysis_objects/All 5318 H3K27me3 enr.reg. annotated with mut. cases, mut. controls, ASD185, and Kdm6b nonVZ down gene sets.csv", row.names = F)
+
+
+write.csv(mmm_counts, file = "./Permutation_analysis_objects/Filtered 3470 H3K27me3 enr.reg. with counts of mut. cases, mut. controls, ASD185, and Kdm6b nonVZ down gene.csv", row.names = F)
+
+
+
+```
+
+```{r}
+
+# Summary tables 
+
+mmm$mutation_type <- factor(mmm$mutation_type, levels = c("Control", "Case", "NA"))
+
+ mmm_counts2 <- mmm %>% 
+                filter(width < 20000) %>%
+                group_by(mutation_type) %>% 
+                summarise(
+                    
+                    n_of_SNVs = length(unique(mutation.ID)),
+                
+                    n_of_regions = length(unique(region_ID))
+                )
+
+mmm_counts2 
+
+###
+
+ mmm_counts2 <- mmm %>% 
+                #filter(width < 20000) %>%     
+                filter(Kdm6b_down_gene == TRUE) %>%
+                group_by(mutation_type) %>% 
+                summarise(
+                    
+                    n_of_SNVs = length(unique(mutation.ID)),
+                    
+                    n_of_reg = length(unique(region_ID))
+                
+                
+                )
+
+mmm_counts2 
+
+
+
+
+ mmm_counts2 <- mmm %>% 
+                filter(width < 20000) %>%     
+                filter(ASD185_gene == TRUE) %>%
+                group_by(mutation_type) %>% 
+                summarise(
+                    
+                    n_of_SNVs = length(unique(mutation.ID)),
+                    
+                    n_of_reg = length(unique(region_ID))
+                
+                
+                )
+
+mmm_counts2 
+
+
+```
+
+```{r}
+# Mutational burden between cases and controls
+
+#Amongst the 5,318 pREs/promoters regions with increased H3K27me3, there were 1,396 ncDNVs across 910 regions for ASD cases (~0.16 ncDNVs per individual) and 770 ncDNVs across 600 regions for the controls (~0.17 ncDNVs per individual); the overall ncDNV burden did not vary between cases and controls in regions with increased H3K27me3 (P = 0.5091). 
+
+
+dat <- data.frame(
+  "ASD_cases_mutations" = c(1396, 6154-1396),
+  "Control_mutations" = c(770, 3487-770),
+  row.names = c("In_H3k27me3_reg", "Out_of_H3k27me3_reg"),
+  stringsAsFactors = FALSE
+)
+colnames(dat) <- c("ASD_cases_mutations", "Control_mutations")
+
+dat
+
+fisher.test(dat, alternative = "two.sided")
+
+```
+
+
+# 4. R Session Info
+
+```{r}
+
+library(pander)
+pander(sessionInfo())
+
+```
+
